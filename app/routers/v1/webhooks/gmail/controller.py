@@ -5,6 +5,7 @@ from httpx import AsyncClient
 
 from app.config.settings import settings
 from app.dependencies import get_db_manager, get_http_client
+from app.infrastructure.db.main import DBManager
 from app.infrastructure.security.crypto import CryptoManager
 from app.models.api.webhooks import PubSubPushBody
 from app.routers.v1.webhooks.gmail.service import GmailWebhookService
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/webhooks/gmail", tags=["webhooks"])
 
 
 def _get_webhook_service(
-    db_manager=Depends(get_db_manager),
+    db_manager: DBManager = Depends(get_db_manager),
     http_client: AsyncClient = Depends(get_http_client),
 ) -> GmailWebhookService:
     crypto = CryptoManager.from_secret(

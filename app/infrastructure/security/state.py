@@ -14,7 +14,7 @@ class OAuthStateManager:
     ttl_seconds: int
 
     def create_state(self, user_id: str) -> str:
-        payload = {
+        payload: dict[str, int | str] = {
             "user_id": user_id,
             "iat": int(time.time()),
         }

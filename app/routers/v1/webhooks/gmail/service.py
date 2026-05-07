@@ -10,7 +10,7 @@ from httpx import AsyncClient, HTTPStatusError
 
 from app.config.settings import Settings
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.google.gmail import GmailApiClient, GmailHistoryResponse
+from app.infrastructure.google.gmail import GmailApiClient, GmailHistoryResponse, GmailMessage
 from app.infrastructure.google.oauth import OAuthClient
 from app.infrastructure.security.crypto import CryptoManager
 from app.models.api.webhooks import GmailNotification, PubSubPushBody
@@ -129,7 +129,7 @@ class GmailWebhookService:
             await EmailWatchService.watch_email(email_id)
 
 
-def _get_header(message, name: str) -> str | None:
+def _get_header(message: GmailMessage, name: str) -> str | None:
     if message.payload is None:
         return None
     for header in message.payload.headers:

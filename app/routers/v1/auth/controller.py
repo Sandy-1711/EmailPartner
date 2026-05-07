@@ -5,6 +5,7 @@ from httpx import AsyncClient
 
 from app.config.settings import settings
 from app.dependencies import get_db_manager, get_http_client
+from app.infrastructure.db.main import DBManager
 from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.models.api.auth import (
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _get_auth_service(
-    db_manager=Depends(get_db_manager),
+    db_manager: DBManager = Depends(get_db_manager),
     http_client: AsyncClient = Depends(get_http_client),
 ) -> AuthService:
     crypto = CryptoManager.from_secret(

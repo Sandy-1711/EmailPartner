@@ -29,7 +29,7 @@ class GmailMessageHeader(BaseModel):
 
 
 class GmailMessagePayload(BaseModel):
-    headers: list[GmailMessageHeader] = Field(default_factory=list)
+    headers: list[GmailMessageHeader] = Field(default_factory=list[GmailMessageHeader])
 
 
 class GmailMessage(BaseModel):
@@ -44,12 +44,12 @@ class GmailHistoryMessageAdded(BaseModel):
 
 
 class GmailHistoryItem(BaseModel):
-    messages_added: list[GmailHistoryMessageAdded] = Field(default_factory=list, alias="messagesAdded")
+    messages_added: list[GmailHistoryMessageAdded] = Field(default_factory=list[GmailHistoryMessageAdded], alias="messagesAdded")
 
 
 class GmailHistoryResponse(BaseModel):
     history_id: str | None = Field(default=None, alias="historyId")
-    history: list[GmailHistoryItem] = Field(default_factory=list)
+    history: list[GmailHistoryItem] = Field(default_factory=list[GmailHistoryItem])
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ class GmailApiClient:
         return GmailHistoryResponse.model_validate(response.json())
 
     async def get_message(self, message_id: str) -> GmailMessage:
-        params = {
+        params: dict[str, Any] = {
             "format": "metadata",
             "metadataHeaders": ["Subject", "From", "Date"],
         }
