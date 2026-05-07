@@ -1,18 +1,69 @@
-from pydantic_settings import BaseSettings
 from typing import Annotated
+
 from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-
     gemini_api_key: Annotated[SecretStr, Field(validation_alias="GEMINI_API_KEY")]
     oauth_client_id: Annotated[SecretStr, Field(validation_alias="OAUTH_CLIENT_ID")]
     oauth_client_secret: Annotated[SecretStr, Field(validation_alias="OAUTH_CLIENT_SECRET")]
+    oauth_redirect_uri: Annotated[str, Field(validation_alias="OAUTH_REDIRECT_URI")]
+
+    mongo_uri: Annotated[SecretStr, Field(validation_alias="MONGO_URI")]
+    mongo_db_name: Annotated[str, Field(validation_alias="MONGO_DB_NAME")]
+
+    encryption_master_key: Annotated[SecretStr, Field(validation_alias="ENCRYPTION_MASTER_KEY")]
+    encryption_key_id: Annotated[str, Field(validation_alias="ENCRYPTION_KEY_ID", default="v1")]
+    oauth_state_secret: Annotated[SecretStr, Field(validation_alias="OAUTH_STATE_SECRET")]
+    oauth_state_ttl_seconds: Annotated[int, Field(validation_alias="OAUTH_STATE_TTL_SECONDS", default=900)]
+
+    google_oauth_authorize_url: Annotated[
+        str, Field(validation_alias="GOOGLE_OAUTH_AUTHORIZE_URL", default="https://accounts.google.com/o/oauth2/v2/auth")
+    ]
+    google_oauth_token_url: Annotated[
+        str, Field(validation_alias="GOOGLE_OAUTH_TOKEN_URL", default="https://oauth2.googleapis.com/token")
+    ]
+    oauth_scopes: Annotated[
+        list[str],
+        Field(
+            validation_alias="OAUTH_SCOPES",
+            default_factory=lambda: [
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.metadata",
+                "https://www.googleapis.com/auth/gmail.modify",
+            ],
+        ),
+    ]
+    gmail_api_base_url: Annotated[
+        str, Field(validation_alias="GMAIL_API_BASE_URL", default="https://gmail.googleapis.com/gmail/v1")
+    ]
+    gmail_watch_topic: Annotated[str, Field(validation_alias="GMAIL_WATCH_TOPIC")]
+    gmail_watch_label_ids: Annotated[
+        list[str], Field(validation_alias="GMAIL_WATCH_LABEL_IDS", default_factory=list)
+    ]
+    gmail_watch_history_types: Annotated[
+        list[str],
+        Field(
+            validation_alias="GMAIL_WATCH_HISTORY_TYPES",
+            default_factory=lambda: ["messageAdded"],
+        ),
+    ]
+    pubsub_verification_token: Annotated[
+        SecretStr | None, Field(validation_alias="PUBSUB_VERIFICATION_TOKEN", default=None)
+    ]
+    token_refresh_skew_seconds: Annotated[
+        int, Field(validation_alias="TOKEN_REFRESH_SKEW_SECONDS", default=300)
+    ]
+    http_timeout_seconds: Annotated[
+        float, Field(validation_alias="HTTP_TIMEOUT_SECONDS", default=10.0)
+    ]
 
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "populate_by_name": True,
+        "extra": "ignore",
     }
 
 

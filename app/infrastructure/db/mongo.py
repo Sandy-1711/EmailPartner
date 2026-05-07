@@ -57,14 +57,17 @@ class MongoDBManager(DocumentDBManager):
 
     async def insert_one(self, collection: type[GenericType], document: GenericType) -> Any:
         result = await self._get_collection_by_type(collection).insert_one(
-            document.model_dump()
+            document.model_dump(by_alias=True, exclude_none=True)
         )
         return result.inserted_id
 
     async def insert_many(
         self, collection: type[GenericType], documents: Iterable[GenericType]
     ) -> Sequence[Any]:
-        docs = [document.model_dump() for document in documents]
+        docs = [
+            document.model_dump(by_alias=True, exclude_none=True)
+            for document in documents
+        ]
         if not docs:
             return []
         result = await self._get_collection_by_type(collection).insert_many(docs)
@@ -93,9 +96,9 @@ class MongoDBManager(DocumentDBManager):
         skip: int | None = None,
     ) -> list[GenericType]:
         cursor = self._get_collection_by_type(collection).find(query, projection)
-        if skip:
+        if skip is not None:
             cursor = cursor.skip(skip)
-        if limit:
+        if limit is not None:
             cursor = cursor.limit(limit)
         return [collection.model_validate(document) async for document in cursor]
 
