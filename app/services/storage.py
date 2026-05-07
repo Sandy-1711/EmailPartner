@@ -16,15 +16,8 @@ class UserStore:
     def __init__(self, db_manager: DBManager) -> None:
         self._db = db_manager.document_db
 
-    async def get_by_id(self, user_id: ObjectId | str) -> Users | None:
-        if isinstance(user_id, ObjectId):
-            object_id = user_id
-        else:
-            try:
-                object_id = ObjectId(user_id)
-            except Exception:
-                return None
-        return await self._db.find_one(Users, {"_id": object_id})
+    async def get_by_id(self, user_id: ObjectId) -> Users | None:
+        return await self._db.find_one(Users, {"_id": user_id})
 
     async def get_by_email(self, email: str) -> Users | None:
         return await self._db.find_one(Users, {"email": email})
@@ -32,11 +25,10 @@ class UserStore:
     async def create(self, user: Users) -> ObjectId:
         return await self._db.insert_one(Users, user)
 
-    async def mark_deleted(self, user_id: ObjectId | str) -> bool:
-        object_id = user_id if isinstance(user_id, ObjectId) else ObjectId(user_id)
+    async def mark_deleted(self, user_id: ObjectId) -> bool:
         updated = await self._db.update_one(
             Users,
-            {"_id": object_id},
+            {"_id": user_id},
             {"$set": {"status": "deleted", "updated_at": utc_now()}},
         )
         return updated > 0
@@ -49,21 +41,19 @@ class GmailAccountStore:
     async def get_by_email(self, gmail_address: str) -> GmailAccount | None:
         return await self._db.find_one(GmailAccount, {"gmail_address": gmail_address})
 
-    async def get_by_user_id(self, user_id: ObjectId | str) -> GmailAccount | None:
-        object_id = user_id if isinstance(user_id, ObjectId) else ObjectId(user_id)
-        return await self._db.find_one(GmailAccount, {"user_id": object_id})
+    async def get_by_user_id(self, user_id: ObjectId) -> GmailAccount | None:
+        return await self._db.find_one(GmailAccount, {"user_id": user_id})
 
     async def create(self, account: GmailAccount) -> ObjectId:
         return await self._db.insert_one(GmailAccount, account)
 
     async def update_tokens(
         self,
-        account_id: ObjectId | str,
+        account_id: ObjectId,
         access_token: EncryptedBlob | None,
         access_expires_at: datetime | None,
         refresh_token: EncryptedBlob | None = None,
     ) -> None:
-        object_id = account_id if isinstance(account_id, ObjectId) else ObjectId(account_id)
         update: dict[str, object] = {"updated_at": utc_now()}
         if access_token is not None:
             update["access_token"] = access_token
@@ -73,17 +63,16 @@ class GmailAccountStore:
             update["access_token_expires_at"] = access_expires_at
         await self._db.update_one(
             GmailAccount,
-            {"_id": object_id},
+            {"_id": account_id},
             {"$set": update},
         )
 
     async def update_watch(
         self,
-        account_id: ObjectId | str,
+        account_id: ObjectId,
         history_id: str | None,
         watch_expiration: datetime | None,
     ) -> None:
-        object_id = account_id if isinstance(account_id, ObjectId) else ObjectId(account_id)
         update = {"updated_at": utc_now()}
         if history_id is not None:
             update["history_id"] = history_id
@@ -91,7 +80,7 @@ class GmailAccountStore:
             update["watch_expiration"] = watch_expiration
         await self._db.update_one(
             GmailAccount,
-            {"_id": object_id},
+            {"_id": account_id},
             {"$set": update},
         )
 
@@ -121,12 +110,11 @@ class EmailStore:
         return str(existing.id)
 
     async def list_by_user(
-        self, user_id: ObjectId | str, limit: int, offset: int
+        self, user_id: ObjectId, limit: int, offset: int
     ) -> list[Emails]:
-        object_id = user_id if isinstance(user_id, ObjectId) else ObjectId(user_id)
         return await self._db.find_many(
             Emails,
-            {"user_id": object_id},
+            {"user_id": user_id},
             limit=limit,
             skip=offset,
         )

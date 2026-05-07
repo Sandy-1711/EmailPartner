@@ -14,7 +14,7 @@ async def ensure_indexes(db: MongoDBManager) -> None:
     await gmail_accounts.create_indexes(
         [
             IndexModel([("gmail_address", 1)], unique=True),
-            IndexModel([("user_id", 1)]),
+            IndexModel([("user_id", 1)], unique=True),
         ]
     )
     await emails.create_indexes(
