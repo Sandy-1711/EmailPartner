@@ -63,6 +63,13 @@ class AuthService:
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
+        existing = await self._gmail_store.get_by_user_id(user.id)
+        if existing is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="User already connected to a Gmail account",
+            )
+
         state = self._state_manager.create_state(str(user.id))
         oauth_client = OAuthClient(self._settings)
         auth_url = oauth_client.build_authorization_url(state)
@@ -100,7 +107,19 @@ class AuthService:
             history_types=self._settings.gmail_watch_history_types,
         )
 
+        existing_by_user = await self._gmail_store.get_by_user_id(user.id)
+        if existing_by_user is not None and existing_by_user.gmail_address != profile.email_address:
+            raise HTTPException(
+                status_code=409,
+                detail="User already connected to a different Gmail account",
+            )
+
         existing_account = await self._gmail_store.get_by_email(profile.email_address)
+        if existing_account is not None and str(existing_account.user_id) != str(user.id):
+            raise HTTPException(
+                status_code=409,
+                detail="Gmail address already linked to another user",
+            )
         if existing_account is not None:
             await self._gmail_store.update_tokens(
                 account_id=existing_account.id,
