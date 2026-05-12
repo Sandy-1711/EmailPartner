@@ -45,16 +45,21 @@ class GeminiProvider:
         system_instructions: str,
         response_model: type[GenericType],
     ) -> GenericType:
-        
         config = genai.types.GenerateContentConfig(
             system_instruction=system_instructions,
             response_mime_type="application/json",
             response_schema=response_model,
         )
 
-        response: GenericType = await self.client.models.generate_content( # type: ignore
+        response = await self.client.models.generate_content(
             model=model,
             contents=prompt,
             config=config,
         )
-        return response
+
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, response_model):
+            return parsed
+        if response.text:
+            return response_model.model_validate_json(response.text)
+        raise ValueError("Gemini returned no parseable structured output")

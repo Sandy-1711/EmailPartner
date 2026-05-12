@@ -6,7 +6,7 @@ from bson import ObjectId
 
 from app.infrastructure.db.main import DBManager
 from app.models.db.crypto import EncryptedBlob
-from app.models.db.emails import Emails
+from app.models.db.emails import Emails, EmailProcessingStatus
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.user import Users
 from app.models.db.utils import utc_now
@@ -88,6 +88,33 @@ class GmailAccountStore:
 class EmailStore:
     def __init__(self, db_manager: DBManager) -> None:
         self._db = db_manager.document_db
+
+    async def get_by_id(self, email_id: ObjectId) -> Emails | None:
+        return await self._db.find_one(Emails, {"_id": email_id})
+
+    async def update_card_fields(
+        self,
+        email_id: ObjectId,
+        *,
+        processing_status: EmailProcessingStatus | None = None,
+        card_text: str | None = None,
+        card_background_url: str | None = None,
+        card_audio_url: str | None = None,
+    ) -> None:
+        update: dict[str, object] = {"updated_at": utc_now()}
+        if processing_status is not None:
+            update["processing_status"] = processing_status.value
+        if card_text is not None:
+            update["card_text"] = card_text
+        if card_background_url is not None:
+            update["card_background_url"] = card_background_url
+        if card_audio_url is not None:
+            update["card_audio_url"] = card_audio_url
+        await self._db.update_one(
+            Emails,
+            {"_id": email_id},
+            {"$set": update},
+        )
 
     async def upsert_email(self, email: Emails) -> str:
         existing = await self._db.find_one(

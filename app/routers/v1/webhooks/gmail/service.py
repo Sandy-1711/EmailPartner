@@ -43,6 +43,7 @@ class GmailWebhookService:
         self._settings = settings
         self._gmail_store = GmailAccountStore(db_manager)
         self._email_store = EmailStore(db_manager)
+        self._watch_service = EmailWatchService(db_manager, settings)
 
     async def handle_push(self, body: PubSubPushBody) -> None:
         notification = self._parse_notification(body)
@@ -134,7 +135,7 @@ class GmailWebhookService:
                 updated_at=utc_now(),
             )
             email_id = await self._email_store.upsert_email(email_record)
-            asyncio.create_task(EmailWatchService.watch_email(email_id)).add_done_callback(
+            asyncio.create_task(self._watch_service.watch_email(email_id)).add_done_callback(
                 _log_task_exception
             )
 

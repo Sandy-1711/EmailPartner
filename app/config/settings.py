@@ -58,6 +58,13 @@ class Settings(BaseSettings):
         float, Field(validation_alias="HTTP_TIMEOUT_SECONDS", default=10.0)
     ]
 
+    summary_model: Annotated[
+        str, Field(validation_alias="SUMMARY_MODEL", default="gemini-2.5-flash")
+    ]
+    summary_max_body_chars: Annotated[
+        int, Field(validation_alias="SUMMARY_MAX_BODY_CHARS", default=8000)
+    ]
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
