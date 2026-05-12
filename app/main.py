@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient
 
 from app.config.settings import settings
@@ -36,6 +38,14 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+_illustrations_dir = Path(settings.local_storage_dir)
+_illustrations_dir.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/static/illustrations",
+    StaticFiles(directory=_illustrations_dir),
+    name="illustrations",
 )
 
 app.include_router(v1_router)

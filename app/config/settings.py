@@ -65,6 +65,23 @@ class Settings(BaseSettings):
         int, Field(validation_alias="SUMMARY_MAX_BODY_CHARS", default=8000)
     ]
 
+    image_provider: Annotated[
+        str, Field(validation_alias="IMAGE_PROVIDER", default="gemini")
+    ]
+    image_model: Annotated[
+        str, Field(validation_alias="IMAGE_MODEL", default="imagen-3.0-generate-001")
+    ]
+    local_storage_dir: Annotated[
+        str, Field(validation_alias="LOCAL_STORAGE_DIR", default="./var/illustrations")
+    ]
+    local_storage_public_base_url: Annotated[
+        str,
+        Field(
+            validation_alias="LOCAL_STORAGE_PUBLIC_BASE_URL",
+            default="http://localhost:8000/static/illustrations",
+        ),
+    ]
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
