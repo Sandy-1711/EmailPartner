@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     encryption_key_id: Annotated[str, Field(validation_alias="ENCRYPTION_KEY_ID", default="v1")]
     oauth_state_secret: Annotated[SecretStr, Field(validation_alias="OAUTH_STATE_SECRET")]
     oauth_state_ttl_seconds: Annotated[int, Field(validation_alias="OAUTH_STATE_TTL_SECONDS", default=900)]
+    session_secret: Annotated[SecretStr, Field(validation_alias="SESSION_SECRET")]
+    session_ttl_seconds: Annotated[int, Field(validation_alias="SESSION_TTL_SECONDS", default=60 * 60 * 24 * 14)]
+    session_cookie_name: Annotated[str, Field(validation_alias="SESSION_COOKIE_NAME", default="ep_session")]
+    session_cookie_secure: Annotated[bool, Field(validation_alias="SESSION_COOKIE_SECURE", default=False)]
+    admin_token: Annotated[SecretStr | None, Field(validation_alias="ADMIN_TOKEN", default=None)]
 
     google_oauth_authorize_url: Annotated[
         str, Field(validation_alias="GOOGLE_OAUTH_AUTHORIZE_URL", default="https://accounts.google.com/o/oauth2/v2/auth")
@@ -28,11 +33,18 @@ class Settings(BaseSettings):
         Field(
             validation_alias="OAUTH_SCOPES",
             default_factory=lambda: [
+                "openid",
+                "email",
+                "profile",
                 "https://www.googleapis.com/auth/gmail.readonly",
                 "https://www.googleapis.com/auth/gmail.metadata",
                 "https://www.googleapis.com/auth/gmail.modify",
             ],
         ),
+    ]
+    google_signin_redirect_uri: Annotated[
+        str | None,
+        Field(validation_alias="GOOGLE_SIGNIN_REDIRECT_URI", default=None),
     ]
     gmail_api_base_url: Annotated[
         str, Field(validation_alias="GMAIL_API_BASE_URL", default="https://gmail.googleapis.com/gmail/v1")

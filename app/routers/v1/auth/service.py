@@ -1,22 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from httpx import AsyncClient
 
 from app.config.settings import Settings
 from app.infrastructure.db.main import DBManager
 from app.infrastructure.google.gmail import GmailApiClient
-from app.infrastructure.google.oauth import OAuthClient
+from app.infrastructure.google.oauth import OAuthClient, OAuthTokenResponse
 from app.infrastructure.security.crypto import CryptoManager
+from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.models.api.auth import (
     ConnectGmailRequest,
     ConnectGmailResponse,
     DeleteAccountRequest,
+    GoogleSignInCallbackResponse,
+    GoogleSignInStartResponse,
     OAuthCallbackResponse,
     SignupRequest,
     SignupResponse,
@@ -36,12 +42,14 @@ class AuthService:
         http_client: AsyncClient,
         crypto: CryptoManager,
         state_manager: OAuthStateManager,
+        session_manager: SessionManager,
         settings: Settings,
     ) -> None:
         self._db_manager = db_manager
         self._http_client = http_client
         self._crypto = crypto
         self._state_manager = state_manager
+        self._session_manager = session_manager
         self._settings = settings
         self._user_store = UserStore(db_manager)
         self._gmail_store = GmailAccountStore(db_manager)
@@ -77,7 +85,7 @@ class AuthService:
                 detail="User already connected to a Gmail account",
             )
 
-        state = self._state_manager.create_state(str(user.id))
+        state = self._state_manager.create_state_for_user(str(user.id))
         oauth_client = OAuthClient(self._settings)
         auth_url = oauth_client.build_authorization_url(state)
         return ConnectGmailResponse(auth_url=auth_url)
@@ -103,6 +111,103 @@ class AuthService:
         if token_response.refresh_token is None:
             raise HTTPException(status_code=400, detail="Missing refresh token")
 
+        account_id, gmail_address = await self._persist_gmail_account(user, token_response)
+        return OAuthCallbackResponse(
+            gmail_account_id=account_id,
+            gmail_address=gmail_address,
+        )
+
+    async def google_signin_start(self) -> GoogleSignInStartResponse:
+        state = self._state_manager.create_state({"mode": "signin"})
+        oauth_client = OAuthClient(
+            self._settings, redirect_uri_override=self._signin_redirect_uri()
+        )
+        return GoogleSignInStartResponse(auth_url=oauth_client.build_authorization_url(state))
+
+    async def handle_google_signin_callback(
+        self, *, code: str, state: str
+    ) -> tuple[GoogleSignInCallbackResponse, str]:
+        payload = self._state_manager.verify_state_payload(state)
+        if payload is None or payload.get("mode") != "signin":
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+
+        oauth_client = OAuthClient(
+            self._settings, redirect_uri_override=self._signin_redirect_uri()
+        )
+        token_response = await oauth_client.exchange_code(self._http_client, code)
+        if token_response.id_token is None:
+            raise HTTPException(status_code=400, detail="Missing id_token from Google")
+        if token_response.refresh_token is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing refresh_token; revoke prior consent and retry",
+            )
+
+        identity = await self._verify_id_token(token_response.id_token)
+        google_sub = str(identity["sub"])
+        email = str(identity["email"])
+        raw_name = identity.get("name")
+        raw_picture = identity.get("picture")
+        display_name: str | None = str(raw_name) if isinstance(raw_name, str) else None
+        picture_url: str | None = str(raw_picture) if isinstance(raw_picture, str) else None
+
+        user = await self._user_store.get_by_google_sub(google_sub)
+        if user is None:
+            user = await self._user_store.get_by_email(email)
+
+        if user is None:
+            user = Users(
+                email=email,
+                display_name=display_name,
+                google_sub=google_sub,
+                picture_url=picture_url,
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
+            await self._user_store.create(user)
+        else:
+            await self._user_store.update_google_identity(
+                user.id,
+                google_sub=google_sub,
+                display_name=display_name,
+                picture_url=picture_url,
+            )
+
+        account_id, gmail_address = await self._persist_gmail_account(user, token_response)
+        session_token = self._session_manager.create_session(str(user.id))
+        return (
+            GoogleSignInCallbackResponse(
+                user_id=str(user.id),
+                email=user.email,
+                display_name=display_name or user.display_name,
+                gmail_address=gmail_address,
+            ),
+            session_token,
+        )
+
+    def _signin_redirect_uri(self) -> str:
+        return (
+            self._settings.google_signin_redirect_uri
+            or self._settings.oauth_redirect_uri
+        )
+
+    async def _verify_id_token(self, token: str):
+        client_id = self._settings.oauth_client_id.get_secret_value()
+
+        def _verify():
+            return google_id_token.verify_oauth2_token(
+                token, google_requests.Request(), client_id
+            )
+
+        try:
+            return await asyncio.to_thread(_verify)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid id_token") from exc
+
+    async def _persist_gmail_account(
+        self, user: Users, token_response: OAuthTokenResponse
+    ) -> tuple[str, str]:
+        assert token_response.refresh_token is not None
         encrypted_refresh = self._crypto.encrypt_str(token_response.refresh_token)
         encrypted_access = self._crypto.encrypt_str(token_response.access_token)
         access_expires_at = token_response.expires_at()
@@ -144,10 +249,7 @@ class AuthService:
                 history_id=watch_response.history_id,
                 watch_expiration=watch_response.expiration_datetime(),
             )
-            return OAuthCallbackResponse(
-                gmail_account_id=str(existing_account.id),
-                gmail_address=profile.email_address,
-            )
+            return str(existing_account.id), profile.email_address
 
         account = GmailAccount(
             user_id=user.id,
@@ -161,10 +263,7 @@ class AuthService:
             updated_at=utc_now(),
         )
         account_id = await self._gmail_store.create(account)
-        return OAuthCallbackResponse(
-            gmail_account_id=str(account_id),
-            gmail_address=profile.email_address,
-        )
+        return str(account_id), profile.email_address
 
     async def delete_account(self, payload: DeleteAccountRequest) -> None:
         try:

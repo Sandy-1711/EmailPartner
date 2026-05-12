@@ -22,8 +22,29 @@ class UserStore:
     async def get_by_email(self, email: str) -> Users | None:
         return await self._db.find_one(Users, {"email": email})
 
+    async def get_by_google_sub(self, google_sub: str) -> Users | None:
+        return await self._db.find_one(Users, {"google_sub": google_sub})
+
     async def create(self, user: Users) -> ObjectId:
         return await self._db.insert_one(Users, user)
+
+    async def update_google_identity(
+        self,
+        user_id: ObjectId,
+        *,
+        google_sub: str,
+        display_name: str | None = None,
+        picture_url: str | None = None,
+    ) -> None:
+        update: dict[str, object] = {
+            "google_sub": google_sub,
+            "updated_at": utc_now(),
+        }
+        if display_name is not None:
+            update["display_name"] = display_name
+        if picture_url is not None:
+            update["picture_url"] = picture_url
+        await self._db.update_one(Users, {"_id": user_id}, {"$set": update})
 
     async def mark_deleted(self, user_id: ObjectId) -> bool:
         updated = await self._db.update_one(

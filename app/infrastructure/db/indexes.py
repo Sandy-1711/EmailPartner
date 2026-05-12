@@ -10,7 +10,12 @@ async def ensure_indexes(db: MongoDBManager) -> None:
     gmail_accounts = db.get_collection("gmail_accounts")
     emails = db.get_collection("emails")
 
-    await users.create_indexes([IndexModel([("email", 1)], unique=True)])
+    await users.create_indexes(
+        [
+            IndexModel([("email", 1)], unique=True),
+            IndexModel([("google_sub", 1)], unique=True, sparse=True),
+        ]
+    )
     await gmail_accounts.create_indexes(
         [
             IndexModel([("gmail_address", 1)], unique=True),

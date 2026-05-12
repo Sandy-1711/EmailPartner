@@ -4,8 +4,10 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -13,18 +15,20 @@ class OAuthStateManager:
     secret: bytes
     ttl_seconds: int
 
-    def create_state(self, user_id: str) -> str:
-        payload: dict[str, int | str] = {
-            "user_id": user_id,
-            "iat": int(time.time()),
-        }
-        payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    def create_state(self, payload: dict[str, Any] | None = None) -> str:
+        full_payload: dict[str, Any] = dict(payload or {})
+        full_payload.setdefault("nonce", secrets.token_urlsafe(16))
+        full_payload["iat"] = int(time.time())
+        payload_bytes = json.dumps(full_payload, separators=(",", ":")).encode("utf-8")
         payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode("ascii").rstrip("=")
         signature = hmac.new(self.secret, payload_b64.encode("ascii"), hashlib.sha256).digest()
         signature_b64 = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
         return f"{payload_b64}.{signature_b64}"
 
-    def verify_state(self, state: str) -> str | None:
+    def create_state_for_user(self, user_id: str) -> str:
+        return self.create_state({"user_id": user_id})
+
+    def verify_state_payload(self, state: str) -> dict[str, Any] | None:
         try:
             payload_b64, signature_b64 = state.split(".", 1)
         except ValueError:
@@ -37,12 +41,22 @@ class OAuthStateManager:
         if not hmac.compare_digest(signature_b64, expected_b64):
             return None
 
-        payload_json = base64.urlsafe_b64decode(_pad_base64(payload_b64))
-        payload = json.loads(payload_json)
+        try:
+            payload_json = base64.urlsafe_b64decode(_pad_base64(payload_b64))
+            payload = json.loads(payload_json)
+        except (ValueError, json.JSONDecodeError):
+            return None
+
         issued_at = int(payload.get("iat", 0))
         if issued_at <= 0 or (issued_at + self.ttl_seconds) < int(time.time()):
             return None
 
+        return payload
+
+    def verify_state(self, state: str) -> str | None:
+        payload = self.verify_state_payload(state)
+        if payload is None:
+            return None
         return str(payload.get("user_id", "")) or None
 
 

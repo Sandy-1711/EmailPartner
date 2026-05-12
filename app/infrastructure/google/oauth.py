@@ -17,6 +17,7 @@ class OAuthTokenResponse(BaseModel):
     refresh_token: str | None = Field(default=None, alias="refresh_token")
     scope: str | None = Field(default=None, alias="scope")
     token_type: str = Field(alias="token_type")
+    id_token: str | None = Field(default=None, alias="id_token")
 
     def expires_at(self) -> datetime:
         return datetime.now(timezone.utc) + timedelta(seconds=self.expires_in)
@@ -25,11 +26,16 @@ class OAuthTokenResponse(BaseModel):
 @dataclass(frozen=True)
 class OAuthClient:
     settings: Settings
+    redirect_uri_override: str | None = None
+
+    @property
+    def _redirect_uri(self) -> str:
+        return self.redirect_uri_override or self.settings.oauth_redirect_uri
 
     def build_authorization_url(self, state: str) -> str:
         params = {
             "client_id": self.settings.oauth_client_id.get_secret_value(),
-            "redirect_uri": self.settings.oauth_redirect_uri,
+            "redirect_uri": self._redirect_uri,
             "response_type": "code",
             "access_type": "offline",
             "prompt": "consent",
@@ -43,7 +49,7 @@ class OAuthClient:
             "code": code,
             "client_id": self.settings.oauth_client_id.get_secret_value(),
             "client_secret": self.settings.oauth_client_secret.get_secret_value(),
-            "redirect_uri": self.settings.oauth_redirect_uri,
+            "redirect_uri": self._redirect_uri,
             "grant_type": "authorization_code",
         }
         response = await client.post(self.settings.google_oauth_token_url, data=data)

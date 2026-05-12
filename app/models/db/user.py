@@ -22,6 +22,8 @@ class Users(ConfigModels.EmailPartnerDBConfig):
     id: PydanticObjectId = Field(default_factory=ObjectId, alias="_id")
     email: EmailStr
     display_name: str | None = None
+    google_sub: str | None = None
+    picture_url: str | None = None
     status: UserStatus = UserStatus.ACTIVE
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

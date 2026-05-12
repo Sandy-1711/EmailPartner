@@ -27,3 +27,22 @@ class OAuthCallbackResponse(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     user_id: str
+
+
+class GoogleSignInStartResponse(BaseModel):
+    auth_url: str
+
+
+class GoogleSignInCallbackResponse(BaseModel):
+    user_id: str
+    email: EmailStr
+    display_name: str | None = None
+    gmail_address: EmailStr | None = None
+
+
+class MeResponse(BaseModel):
+    user_id: str
+    email: EmailStr
+    display_name: str | None = None
+    picture_url: str | None = None
+    gmail_connected: bool
