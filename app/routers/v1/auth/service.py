@@ -101,7 +101,7 @@ class AuthService:
                 picture_url=picture_url,
             )
 
-        account_id, gmail_address = await self._persist_gmail_account(user, token_response)
+        _, gmail_address = await self._persist_gmail_account(user, token_response)
         session_token = self._session_manager.create_session(str(user.id))
         return (
             GoogleSignInCallbackResponse(
@@ -117,7 +117,7 @@ class AuthService:
         client_id = self._settings.oauth_client_id.get_secret_value()
 
         def _verify():
-            return google_id_token.verify_oauth2_token(
+            return google_id_token.verify_oauth2_token( #type: ignore
                 token, google_requests.Request(), client_id
             )
 

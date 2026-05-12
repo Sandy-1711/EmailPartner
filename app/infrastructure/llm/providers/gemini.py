@@ -51,7 +51,7 @@ class GeminiProvider:
             response_schema=response_model,
         )
 
-        response = await self.client.models.generate_content(
+        response = await self.client.models.generate_content( # type: ignore
             model=model,
             contents=prompt,
             config=config,
