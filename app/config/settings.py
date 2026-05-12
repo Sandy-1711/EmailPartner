@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     session_cookie_name: Annotated[str, Field(validation_alias="SESSION_COOKIE_NAME", default="ep_session")]
     session_cookie_secure: Annotated[bool, Field(validation_alias="SESSION_COOKIE_SECURE", default=False)]
     admin_token: Annotated[SecretStr | None, Field(validation_alias="ADMIN_TOKEN", default=None)]
+    watch_renew_interval_seconds: Annotated[
+        int, Field(validation_alias="WATCH_RENEW_INTERVAL_SECONDS", default=60 * 60)
+    ]
+    watch_renew_threshold_hours: Annotated[
+        int, Field(validation_alias="WATCH_RENEW_THRESHOLD_HOURS", default=24)
+    ]
+    enable_background_jobs: Annotated[
+        bool, Field(validation_alias="ENABLE_BACKGROUND_JOBS", default=True)
+    ]
 
     google_oauth_authorize_url: Annotated[
         str, Field(validation_alias="GOOGLE_OAUTH_AUTHORIZE_URL", default="https://accounts.google.com/o/oauth2/v2/auth")

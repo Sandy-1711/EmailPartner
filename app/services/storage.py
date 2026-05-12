@@ -88,6 +88,16 @@ class GmailAccountStore:
             {"$set": update},
         )
 
+    async def find_expiring(self, before: datetime, limit: int = 100) -> list[GmailAccount]:
+        return await self._db.find_many(
+            GmailAccount,
+            {
+                "status": "active",
+                "watch_expiration": {"$lt": before},
+            },
+            limit=limit,
+        )
+
     async def update_watch(
         self,
         account_id: ObjectId,
