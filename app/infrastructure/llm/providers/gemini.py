@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, AsyncIterable
 
 from google import genai
-from app.config import Settings
+from app.config.settings import settings
 from google.genai import types
 from google.genai.client import AsyncClient
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ class GeminiProvider:
 
     def __init__(self):
         self.client: AsyncClient = genai.Client(
-            api_key=Settings.gemini_api_key.get_secret_value()
+            api_key=settings.gemini_api_key.get_secret_value()
         ).aio
 
     async def generate_text_as_stream(

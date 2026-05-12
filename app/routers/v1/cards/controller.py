@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from bson import ObjectId
+from bson.errors import InvalidId
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import get_db_manager
 from app.models.api.cards import CardListResponse, EmailCard
@@ -16,8 +18,13 @@ async def list_cards(
     offset: int = Query(default=0, ge=0),
     db_manager=Depends(get_db_manager),
 ) -> CardListResponse:
+    try:
+        user_oid = ObjectId(user_id)
+    except InvalidId as exc:
+        raise HTTPException(status_code=400, detail="Invalid user_id") from exc
+
     store = EmailStore(db_manager)
-    emails = await store.list_by_user(user_id=user_id, limit=limit, offset=offset)
+    emails = await store.list_by_user(user_id=user_oid, limit=limit, offset=offset)
     cards = [
         EmailCard(
             id=str(email.id),

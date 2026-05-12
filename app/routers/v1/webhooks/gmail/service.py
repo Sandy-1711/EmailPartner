@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -126,7 +127,17 @@ class GmailWebhookService:
                 updated_at=utc_now(),
             )
             email_id = await self._email_store.upsert_email(email_record)
-            await EmailWatchService.watch_email(email_id)
+            asyncio.create_task(EmailWatchService.watch_email(email_id)).add_done_callback(
+                _log_task_exception
+            )
+
+
+def _log_task_exception(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.exception("Background email task failed", exc_info=exc)
 
 
 def _get_header(message: GmailMessage, name: str) -> str | None:

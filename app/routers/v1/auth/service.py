@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import HTTPException
 from httpx import AsyncClient
 
@@ -59,7 +61,12 @@ class AuthService:
         return SignupResponse(user_id=str(user_id))
 
     async def connect_gmail(self, payload: ConnectGmailRequest) -> ConnectGmailResponse:
-        user = await self._user_store.get_by_id(payload.user_id)
+        try:
+            user_oid = ObjectId(payload.user_id)
+        except InvalidId as exc:
+            raise HTTPException(status_code=400, detail="Invalid user_id") from exc
+
+        user = await self._user_store.get_by_id(user_oid)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -82,7 +89,12 @@ class AuthService:
         if user_id is None:
             raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-        user = await self._user_store.get_by_id(user_id)
+        try:
+            user_oid = ObjectId(user_id)
+        except InvalidId as exc:
+            raise HTTPException(status_code=400, detail="Invalid state payload") from exc
+
+        user = await self._user_store.get_by_id(user_oid)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -155,7 +167,12 @@ class AuthService:
         )
 
     async def delete_account(self, payload: DeleteAccountRequest) -> None:
-        deleted = await self._user_store.mark_deleted(payload.user_id)
+        try:
+            user_oid = ObjectId(payload.user_id)
+        except InvalidId as exc:
+            raise HTTPException(status_code=400, detail="Invalid user_id") from exc
+
+        deleted = await self._user_store.mark_deleted(user_oid)
         if not deleted:
             raise HTTPException(status_code=404, detail="User not found")
         logger.info("User %s marked as deleted", payload.user_id)
