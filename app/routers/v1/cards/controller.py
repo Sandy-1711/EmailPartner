@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.config.settings import settings
 from app.dependencies import get_db_manager
+from app.infrastructure.db.main import DBManager
 from app.models.api.cards import CardListResponse, EmailCard
 from app.services.storage import EmailStore
+from app.services.watch.email import EmailWatchService
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -42,3 +47,23 @@ async def list_cards(
     ]
     next_offset = offset + len(cards) if len(cards) == limit else None
     return CardListResponse(items=cards, limit=limit, offset=offset, next_offset=next_offset)
+
+
+@router.post("/{card_id}/retry")
+async def retry_card(
+    card_id: str,
+    db_manager: DBManager = Depends(get_db_manager),
+) -> dict[str, str]:
+    try:
+        card_oid = ObjectId(card_id)
+    except InvalidId as exc:
+        raise HTTPException(status_code=400, detail="Invalid card_id") from exc
+
+    store = EmailStore(db_manager)
+    email = await store.get_by_id(card_oid)
+    if email is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    watcher = EmailWatchService(db_manager, settings)
+    asyncio.create_task(watcher.watch_email(card_oid))
+    return {"status": "scheduled", "card_id": card_id}

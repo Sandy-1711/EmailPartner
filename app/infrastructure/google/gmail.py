@@ -7,6 +7,29 @@ from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, Field
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_STATUSES
+    return isinstance(exc, httpx.TransportError)
+
+
+_retry_policy = retry(
+    reraise=True,
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    retry=retry_if_exception(_is_retryable),
+)
 
 
 class GmailProfile(BaseModel):
@@ -96,6 +119,7 @@ class GmailApiClient:
         response.raise_for_status()
         return GmailWatchResponse.model_validate(response.json())
 
+    @_retry_policy
     async def list_history(
         self, start_history_id: str, history_types: list[str] | None = None
     ) -> GmailHistoryResponse:
@@ -108,6 +132,7 @@ class GmailApiClient:
         response.raise_for_status()
         return GmailHistoryResponse.model_validate(response.json())
 
+    @_retry_policy
     async def get_message(
         self,
         message_id: str,
