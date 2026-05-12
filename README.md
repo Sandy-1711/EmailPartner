@@ -61,8 +61,8 @@ Send yourself an email. Within ~30s, `GET /v1/cards/?user_id=<your-user-id>` ret
 
 - **Persistence**: MongoDB. Models in `app/models/db/` use `pydantic-mongo`. Indexes set up at startup in `app/infrastructure/db/indexes.py`.
 - **Secrets at rest**: Gmail refresh/access tokens stored as `EncryptedBlob` (AES-GCM envelope). Master key from `ENCRYPTION_MASTER_KEY`.
-- **LLM**: `app/infrastructure/llm/` exposes a `LLMManager` with a `GeminiProvider`. The pipeline asks for a JSON-structured `SummaryResult`.
-- **Image gen**: `app/infrastructure/images/` exposes `ImageManager`. `GeminiImageProvider` covers both `imagen-*` (`generate_images`) and `gemini-*-image` (`generate_content` with IMAGE modality). The model name picks the API path.
+- **LLM**: `app/infrastructure/llm/` exposes a `LLMManager` with a `GeminiProvider`. The pipeline asks for a JSON-structured `SummaryResult`. Default model: `gemini-3.1-flash-lite` (overridable via `SUMMARY_MODEL`).
+- **Image gen**: `app/infrastructure/images/` exposes `ImageManager`. `GeminiImageProvider` covers both `imagen-*` (`generate_images`) and `gemini-*-image*` (`generate_content` with IMAGE+TEXT modalities). The model name picks the API path. Default model: `gemini-2.5-flash-image-preview` ("Nano Banana"), overridable via `IMAGE_MODEL`.
 - **Storage**: `app/infrastructure/storage/` Protocol + `LocalBlobStorage` (writes to `LOCAL_STORAGE_DIR`, served from `/static/illustrations`). Swap to a GCS/S3 implementation by adding one class.
 - **Async**: Pub/Sub webhook returns 200 immediately; `asyncio.create_task` runs the summary + image pipeline in-process. Single-instance only; for horizontal scale move to a queue.
 - **Watch renewal**: Lifespan starts an hourly loop in `WatchRenewalService` that re-issues `users.watch` for accounts within 24h of expiration. Disable with `ENABLE_BACKGROUND_JOBS=false` (e.g. in tests).

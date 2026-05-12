@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     ]
 
     summary_model: Annotated[
-        str, Field(validation_alias="SUMMARY_MODEL", default="gemini-2.5-flash")
+        str, Field(validation_alias="SUMMARY_MODEL", default="gemini-3.1-flash-lite")
     ]
     summary_max_body_chars: Annotated[
         int, Field(validation_alias="SUMMARY_MAX_BODY_CHARS", default=8000)
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
         str, Field(validation_alias="IMAGE_PROVIDER", default="gemini")
     ]
     image_model: Annotated[
-        str, Field(validation_alias="IMAGE_MODEL", default="imagen-3.0-generate-001")
+        str, Field(validation_alias="IMAGE_MODEL", default="gemini-2.5-flash-image-preview")
     ]
     local_storage_dir: Annotated[
         str, Field(validation_alias="LOCAL_STORAGE_DIR", default="./var/illustrations")
