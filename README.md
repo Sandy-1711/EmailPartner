@@ -51,9 +51,6 @@ Send yourself an email. Within ~30s, `GET /v1/cards/?user_id=<your-user-id>` ret
 | GET  | `/v1/auth/google/callback` | Exchanges code, verifies id_token, creates/links user, starts Gmail watch, sets session cookie |
 | GET  | `/v1/auth/me` | Returns current user (requires session cookie) |
 | POST | `/v1/auth/logout` | Clears session cookie |
-| POST | `/v1/auth/signup` | Legacy (kept for the old flow) |
-| POST | `/v1/auth/connect-gmail` | Legacy |
-| GET  | `/v1/auth/oauth/callback` | Legacy callback |
 | POST | `/v1/auth/delete-account` | Marks user deleted |
 | POST | `/v1/webhooks/gmail/` | Pub/Sub push target |
 | GET  | `/v1/cards/` | Lists cards for a user |

@@ -25,9 +25,6 @@ class OAuthStateManager:
         signature_b64 = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
         return f"{payload_b64}.{signature_b64}"
 
-    def create_state_for_user(self, user_id: str) -> str:
-        return self.create_state({"user_id": user_id})
-
     def verify_state_payload(self, state: str) -> dict[str, Any] | None:
         try:
             payload_b64, signature_b64 = state.split(".", 1)
@@ -52,12 +49,6 @@ class OAuthStateManager:
             return None
 
         return payload
-
-    def verify_state(self, state: str) -> str | None:
-        payload = self.verify_state_payload(state)
-        if payload is None:
-            return None
-        return str(payload.get("user_id", "")) or None
 
 
 def _pad_base64(value: str) -> bytes:

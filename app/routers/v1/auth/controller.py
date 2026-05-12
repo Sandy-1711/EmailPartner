@@ -12,15 +12,10 @@ from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.models.api.auth import (
-    ConnectGmailRequest,
-    ConnectGmailResponse,
     DeleteAccountRequest,
     GoogleSignInCallbackResponse,
     GoogleSignInStartResponse,
     MeResponse,
-    OAuthCallbackResponse,
-    SignupRequest,
-    SignupResponse,
 )
 from app.routers.v1.auth.service import AuthService
 from app.services.storage import GmailAccountStore, UserStore
@@ -50,42 +45,6 @@ def _get_auth_service(
     return AuthService(
         db_manager, http_client, crypto, state_manager, session_manager, settings
     )
-
-
-@router.post("/signup", response_model=SignupResponse)
-async def signup(
-    payload: SignupRequest, service: AuthService = Depends(_get_auth_service)
-) -> SignupResponse:
-    return await service.signup(payload)
-
-
-@router.post("/connect-gmail", response_model=ConnectGmailResponse)
-async def connect_gmail(
-    payload: ConnectGmailRequest, service: AuthService = Depends(_get_auth_service)
-) -> ConnectGmailResponse:
-    return await service.connect_gmail(payload)
-
-
-@router.get("/oauth/callback", response_model=OAuthCallbackResponse)
-async def oauth_callback(
-    code: str | None = Query(default=None),
-    state: str | None = Query(default=None),
-    error: str | None = Query(default=None),
-    service: AuthService = Depends(_get_auth_service),
-) -> OAuthCallbackResponse:
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    if not code or not state:
-        raise HTTPException(status_code=400, detail="Missing code or state")
-    return await service.handle_oauth_callback(code=code, state=state)
-
-
-@router.post("/delete-account")
-async def delete_account(
-    payload: DeleteAccountRequest, service: AuthService = Depends(_get_auth_service)
-) -> dict[str, str]:
-    await service.delete_account(payload)
-    return {"status": "deleted"}
 
 
 @router.post("/google/start", response_model=GoogleSignInStartResponse)
@@ -158,3 +117,11 @@ async def me(
 async def logout(response: Response) -> dict[str, str]:
     response.delete_cookie(settings.session_cookie_name)
     return {"status": "ok"}
+
+
+@router.post("/delete-account")
+async def delete_account(
+    payload: DeleteAccountRequest, service: AuthService = Depends(_get_auth_service)
+) -> dict[str, str]:
+    await service.delete_account(payload)
+    return {"status": "deleted"}

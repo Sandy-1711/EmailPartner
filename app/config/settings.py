@@ -51,10 +51,6 @@ class Settings(BaseSettings):
             ],
         ),
     ]
-    google_signin_redirect_uri: Annotated[
-        str | None,
-        Field(validation_alias="GOOGLE_SIGNIN_REDIRECT_URI", default=None),
-    ]
     gmail_api_base_url: Annotated[
         str, Field(validation_alias="GMAIL_API_BASE_URL", default="https://gmail.googleapis.com/gmail/v1")
     ]

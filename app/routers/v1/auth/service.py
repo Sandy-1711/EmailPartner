@@ -18,14 +18,9 @@ from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.models.api.auth import (
-    ConnectGmailRequest,
-    ConnectGmailResponse,
     DeleteAccountRequest,
     GoogleSignInCallbackResponse,
     GoogleSignInStartResponse,
-    OAuthCallbackResponse,
-    SignupRequest,
-    SignupResponse,
 )
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.user import Users
@@ -54,74 +49,9 @@ class AuthService:
         self._user_store = UserStore(db_manager)
         self._gmail_store = GmailAccountStore(db_manager)
 
-    async def signup(self, payload: SignupRequest) -> SignupResponse:
-        existing = await self._user_store.get_by_email(payload.email)
-        if existing is not None:
-            return SignupResponse(user_id=str(existing.id))
-
-        user = Users(
-            email=payload.email,
-            display_name=payload.display_name,
-            created_at=utc_now(),
-            updated_at=utc_now(),
-        )
-        user_id = await self._user_store.create(user)
-        return SignupResponse(user_id=str(user_id))
-
-    async def connect_gmail(self, payload: ConnectGmailRequest) -> ConnectGmailResponse:
-        try:
-            user_oid = ObjectId(payload.user_id)
-        except InvalidId as exc:
-            raise HTTPException(status_code=400, detail="Invalid user_id") from exc
-
-        user = await self._user_store.get_by_id(user_oid)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        existing = await self._gmail_store.get_by_user_id(user.id)
-        if existing is not None:
-            raise HTTPException(
-                status_code=409,
-                detail="User already connected to a Gmail account",
-            )
-
-        state = self._state_manager.create_state_for_user(str(user.id))
-        oauth_client = OAuthClient(self._settings)
-        auth_url = oauth_client.build_authorization_url(state)
-        return ConnectGmailResponse(auth_url=auth_url)
-
-    async def handle_oauth_callback(
-        self, *, code: str, state: str
-    ) -> OAuthCallbackResponse:
-        user_id = self._state_manager.verify_state(state)
-        if user_id is None:
-            raise HTTPException(status_code=400, detail="Invalid or expired state")
-
-        try:
-            user_oid = ObjectId(user_id)
-        except InvalidId as exc:
-            raise HTTPException(status_code=400, detail="Invalid state payload") from exc
-
-        user = await self._user_store.get_by_id(user_oid)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        oauth_client = OAuthClient(self._settings)
-        token_response = await oauth_client.exchange_code(self._http_client, code)
-        if token_response.refresh_token is None:
-            raise HTTPException(status_code=400, detail="Missing refresh token")
-
-        account_id, gmail_address = await self._persist_gmail_account(user, token_response)
-        return OAuthCallbackResponse(
-            gmail_account_id=account_id,
-            gmail_address=gmail_address,
-        )
-
     async def google_signin_start(self) -> GoogleSignInStartResponse:
         state = self._state_manager.create_state({"mode": "signin"})
-        oauth_client = OAuthClient(
-            self._settings, redirect_uri_override=self._signin_redirect_uri()
-        )
+        oauth_client = OAuthClient(self._settings)
         return GoogleSignInStartResponse(auth_url=oauth_client.build_authorization_url(state))
 
     async def handle_google_signin_callback(
@@ -131,9 +61,7 @@ class AuthService:
         if payload is None or payload.get("mode") != "signin":
             raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-        oauth_client = OAuthClient(
-            self._settings, redirect_uri_override=self._signin_redirect_uri()
-        )
+        oauth_client = OAuthClient(self._settings)
         token_response = await oauth_client.exchange_code(self._http_client, code)
         if token_response.id_token is None:
             raise HTTPException(status_code=400, detail="Missing id_token from Google")
@@ -183,12 +111,6 @@ class AuthService:
                 gmail_address=gmail_address,
             ),
             session_token,
-        )
-
-    def _signin_redirect_uri(self) -> str:
-        return (
-            self._settings.google_signin_redirect_uri
-            or self._settings.oauth_redirect_uri
         )
 
     async def _verify_id_token(self, token: str):
