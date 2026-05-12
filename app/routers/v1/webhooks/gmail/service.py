@@ -11,7 +11,12 @@ from httpx import AsyncClient, HTTPStatusError
 
 from app.config.settings import Settings
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.google.gmail import GmailApiClient, GmailHistoryResponse, GmailMessage
+from app.infrastructure.google.gmail import (
+    GmailApiClient,
+    GmailHistoryResponse,
+    GmailMessage,
+    extract_plain_text,
+)
 from app.infrastructure.google.oauth import OAuthClient
 from app.infrastructure.security.crypto import CryptoManager
 from app.models.api.webhooks import GmailNotification, PubSubPushBody
@@ -108,11 +113,12 @@ class GmailWebhookService:
                 message_ids.append(added.message.id)
 
         for message_id in message_ids:
-            message = await gmail_client.get_message(message_id)
+            message = await gmail_client.get_message(message_id, format="full")
             subject = _get_header(message, "Subject")
             from_header = _get_header(message, "From")
             date_header = _get_header(message, "Date")
             received_at = _parse_date(date_header)
+            body = extract_plain_text(message) or None
 
             email_record = Emails(
                 user_id=account.user_id,
@@ -122,6 +128,7 @@ class GmailWebhookService:
                 subject=subject,
                 from_email=from_header,
                 snippet=message.snippet,
+                body=body,
                 received_at=received_at,
                 created_at=utc_now(),
                 updated_at=utc_now(),

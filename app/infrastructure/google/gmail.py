@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, Field
@@ -28,8 +29,16 @@ class GmailMessageHeader(BaseModel):
     value: str
 
 
+class GmailMessageBody(BaseModel):
+    data: str | None = None
+    size: int | None = None
+
+
 class GmailMessagePayload(BaseModel):
+    mime_type: str | None = Field(default=None, alias="mimeType")
     headers: list[GmailMessageHeader] = Field(default_factory=list[GmailMessageHeader])
+    body: GmailMessageBody | None = None
+    parts: list["GmailMessagePayload"] = Field(default_factory=list["GmailMessagePayload"])
 
 
 class GmailMessage(BaseModel):
@@ -37,6 +46,9 @@ class GmailMessage(BaseModel):
     thread_id: str = Field(alias="threadId")
     snippet: str | None = None
     payload: GmailMessagePayload | None = None
+
+
+GmailMessagePayload.model_rebuild()
 
 
 class GmailHistoryMessageAdded(BaseModel):
@@ -96,11 +108,14 @@ class GmailApiClient:
         response.raise_for_status()
         return GmailHistoryResponse.model_validate(response.json())
 
-    async def get_message(self, message_id: str) -> GmailMessage:
-        params: dict[str, Any] = {
-            "format": "metadata",
-            "metadataHeaders": ["Subject", "From", "Date"],
-        }
+    async def get_message(
+        self,
+        message_id: str,
+        format: Literal["metadata", "full"] = "metadata",
+    ) -> GmailMessage:
+        params: dict[str, Any] = {"format": format}
+        if format == "metadata":
+            params["metadataHeaders"] = ["Subject", "From", "Date"]
         response = await self.http_client.get(
             f"{self.base_url}/users/me/messages/{message_id}",
             headers=self._headers(),
@@ -108,3 +123,52 @@ class GmailApiClient:
         )
         response.raise_for_status()
         return GmailMessage.model_validate(response.json())
+
+
+def _decode_body(data: str | None) -> str:
+    if not data:
+        return ""
+    try:
+        return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode(
+            "utf-8", errors="replace"
+        )
+    except (ValueError, TypeError):
+        return ""
+
+
+def _strip_html(html: str) -> str:
+    import re
+    no_scripts = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    no_tags = re.sub(r"<[^>]+>", " ", no_scripts)
+    return re.sub(r"\s+", " ", no_tags).strip()
+
+
+def extract_plain_text(message: GmailMessage) -> str:
+    if message.payload is None:
+        return ""
+
+    plain_chunks: list[str] = []
+    html_chunks: list[str] = []
+
+    def walk(part: GmailMessagePayload) -> None:
+        mime = (part.mime_type or "").lower()
+        if part.parts:
+            for child in part.parts:
+                walk(child)
+            return
+        body_data = part.body.data if part.body else None
+        if not body_data:
+            return
+        decoded = _decode_body(body_data)
+        if mime == "text/plain":
+            plain_chunks.append(decoded)
+        elif mime == "text/html":
+            html_chunks.append(decoded)
+
+    walk(message.payload)
+
+    if plain_chunks:
+        return "\n".join(chunk.strip() for chunk in plain_chunks if chunk.strip())
+    if html_chunks:
+        return "\n".join(_strip_html(chunk) for chunk in html_chunks if chunk.strip())
+    return ""
