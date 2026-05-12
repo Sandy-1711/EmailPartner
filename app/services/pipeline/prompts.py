@@ -23,3 +23,23 @@ def build_summary_prompt(email: Emails, max_body_chars: int) -> str:
         f"\n"
         f"{body or '(empty body)'}"
     )
+
+
+_TONE_PALETTE = {
+    "informative": "calm muted blues and greys, soft daylight",
+    "urgent": "warm reds and oranges, high contrast",
+    "social": "warm pastels, soft pinks and yellows",
+    "promotional": "vibrant saturated colors, playful gradients",
+    "transactional": "neutral greens and beiges, clean and precise",
+}
+
+
+def build_illustration_prompt(*, headline: str, tone: str) -> str:
+    palette = _TONE_PALETTE.get(tone, _TONE_PALETTE["informative"])
+    return (
+        f"Flat editorial illustration evoking: {headline}. "
+        f"Style: soft shapes, gentle shading, minimal detail. "
+        f"Palette: {palette}. "
+        f"No text, no logos, no faces, no watermarks. "
+        f"Square composition, balanced negative space."
+    )
