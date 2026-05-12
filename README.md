@@ -47,7 +47,7 @@ Send yourself an email. Within ~30s, `GET /v1/cards/?user_id=<your-user-id>` ret
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/v1/auth/google/start` | Returns Google OAuth URL (sign-in + Gmail in one consent) |
+| GET  | `/v1/auth/google/start` | Returns Google OAuth URL (sign-in + Gmail in one consent) |
 | GET  | `/v1/auth/google/callback` | Exchanges code, verifies id_token, creates/links user, starts Gmail watch, sets session cookie |
 | GET  | `/v1/auth/me` | Returns current user (requires session cookie) |
 | POST | `/v1/auth/logout` | Clears session cookie |

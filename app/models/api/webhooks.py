@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PubSubMessage(BaseModel):
@@ -20,3 +20,10 @@ class PubSubPushBody(BaseModel):
 class GmailNotification(BaseModel):
     email_address: str = Field(alias="emailAddress")
     history_id: str = Field(alias="historyId")
+
+    @field_validator("history_id", mode="before")
+    @classmethod
+    def _coerce_history_id(cls, value: object) -> object:
+        if isinstance(value, int):
+            return str(value)
+        return value

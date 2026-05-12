@@ -21,7 +21,7 @@ async def list_cards(
     user_id: str = Query(...),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    db_manager=Depends(get_db_manager),
+    db_manager: DBManager = Depends(get_db_manager),
 ) -> CardListResponse:
     try:
         user_oid = ObjectId(user_id)

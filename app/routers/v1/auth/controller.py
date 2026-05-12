@@ -47,7 +47,7 @@ def _get_auth_service(
     )
 
 
-@router.post("/google/start", response_model=GoogleSignInStartResponse)
+@router.get("/google/start", response_model=GoogleSignInStartResponse)
 async def google_signin_start(
     service: AuthService = Depends(_get_auth_service),
 ) -> GoogleSignInStartResponse:

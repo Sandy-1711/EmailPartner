@@ -22,7 +22,7 @@ class MongoDBManager(DocumentDBManager):
     async def connect(self) -> None:
         if self._client is not None:
             return
-        self._client = AsyncMongoClient(self._uri)
+        self._client = AsyncMongoClient(self._uri, tz_aware=True)
         self._db = self._client[self._database]
         await self._client.admin.command("ping")
 

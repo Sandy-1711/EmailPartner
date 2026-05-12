@@ -23,7 +23,7 @@ def _get_webhook_service(
     return GmailWebhookService(db_manager, http_client, crypto, settings)
 
 
-@router.post("/")
+@router.post("")
 async def handle_gmail_webhook(
     request: Request,
     body: PubSubPushBody,
