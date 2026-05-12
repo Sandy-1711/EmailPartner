@@ -85,7 +85,7 @@ class Settings(BaseSettings):
         str, Field(validation_alias="IMAGE_PROVIDER", default="gemini")
     ]
     image_model: Annotated[
-        str, Field(validation_alias="IMAGE_MODEL", default="gemini-2.5-flash-image-preview")
+        str, Field(validation_alias="IMAGE_MODEL", default="gemini-2.5-flash-image")
     ]
     local_storage_dir: Annotated[
         str, Field(validation_alias="LOCAL_STORAGE_DIR", default="./var/illustrations")
