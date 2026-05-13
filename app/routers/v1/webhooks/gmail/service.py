@@ -24,8 +24,11 @@ from app.models.api.webhooks import GmailNotification, PubSubPushBody
 from app.models.db.emails import Emails
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.utils import utc_now
+from app.infrastructure.images.main import build_image_provider
+from app.infrastructure.llm.main import build_llm_provider
+from app.infrastructure.storage.local import LocalBlobStorage
+from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.storage import EmailStore, GmailAccountStore
-from app.services.watch.email import EmailWatchService
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,14 @@ class GmailWebhookService:
         self._settings = settings
         self._gmail_store = GmailAccountStore(db_manager)
         self._email_store = EmailStore(db_manager)
-        self._watch_service = EmailWatchService(db_manager, settings)
+        storage = LocalBlobStorage(
+            settings.local_storage_dir,
+            settings.local_storage_public_base_url,
+        )
+        api_key = settings.gemini_api_key.get_secret_value()
+        llm = build_llm_provider(provider="gemini", api_key=api_key)
+        image = build_image_provider(provider=settings.image_provider, api_key=api_key)
+        self._pipeline = EmailPipeline(db_manager, settings, storage, llm, image)
 
     async def handle_push(self, body: PubSubPushBody) -> None:
         notification = self._parse_notification(body)
@@ -137,7 +147,7 @@ class GmailWebhookService:
             )
             email_id = await self._email_store.upsert_email(email_record)
             asyncio.create_task(
-                self._watch_service.watch_email(ObjectId(email_id))
+                self._pipeline.run(ObjectId(email_id))
             ).add_done_callback(_log_task_exception)
 
 
