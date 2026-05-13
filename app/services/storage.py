@@ -147,7 +147,7 @@ class EmailStore:
             {"$set": update},
         )
 
-    async def upsert_email(self, email: Emails) -> str:
+    async def upsert_email(self, email: Emails) -> ObjectId:
         existing = await self._db.find_one(
             Emails, {"gmail_message_id": email.gmail_message_id}
         )
@@ -158,14 +158,14 @@ class EmailStore:
             inserted_id = await self._db.insert_one(
                 Emails, Emails.model_validate(payload)
             )
-            return str(inserted_id)
+            return ObjectId(inserted_id) if not isinstance(inserted_id, ObjectId) else inserted_id
 
         await self._db.update_one(
             Emails,
             {"_id": existing.id},
             {"$set": payload},
         )
-        return str(existing.id)
+        return existing.id
 
     async def list_by_user(
         self, user_id: ObjectId, limit: int, offset: int
