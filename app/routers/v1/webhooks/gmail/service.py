@@ -18,14 +18,14 @@ from app.infrastructure.google.gmail import (
     extract_plain_text,
 )
 from app.infrastructure.google.oauth import OAuthClient
+from app.infrastructure.images.providers.base import ImageProvider
+from app.infrastructure.llm.providers.base import LLMProvider
 from app.infrastructure.security.crypto import CryptoManager
+from app.infrastructure.storage.base import BlobStorage
 from app.models.api.webhooks import GmailNotification, PubSubPushBody
 from app.models.db.emails import Emails
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.utils import utc_now
-from app.infrastructure.images.main import build_image_provider
-from app.infrastructure.llm.main import build_llm_provider
-from app.infrastructure.storage.local import LocalBlobStorage
 from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.storage import EmailStore, GmailAccountStore
 
@@ -39,6 +39,9 @@ class GmailWebhookService:
         http_client: AsyncClient,
         crypto: CryptoManager,
         settings: Settings,
+        llm: LLMProvider,
+        image: ImageProvider,
+        storage: BlobStorage,
     ) -> None:
         self._db_manager = db_manager
         self._http_client = http_client
@@ -46,13 +49,6 @@ class GmailWebhookService:
         self._settings = settings
         self._gmail_store = GmailAccountStore(db_manager)
         self._email_store = EmailStore(db_manager)
-        storage = LocalBlobStorage(
-            settings.local_storage_dir,
-            settings.local_storage_public_base_url,
-        )
-        api_key = settings.gemini_api_key.get_secret_value()
-        llm = build_llm_provider(provider="gemini", api_key=api_key)
-        image = build_image_provider(provider=settings.image_provider, api_key=api_key)
         self._pipeline = EmailPipeline(db_manager, settings, storage, llm, image)
 
     async def handle_push(self, body: PubSubPushBody) -> None:

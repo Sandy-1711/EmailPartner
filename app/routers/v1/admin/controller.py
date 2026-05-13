@@ -5,8 +5,8 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, Header, HTTPException
 from httpx import AsyncClient
 
-from app.config.settings import settings
-from app.dependencies import get_db_manager, get_http_client
+from app.config.settings import Settings, settings
+from app.dependencies import get_crypto, get_db_manager, get_http_client, get_settings
 from app.infrastructure.db.main import DBManager
 from app.infrastructure.security.crypto import CryptoManager
 from app.services.watch.renewal import WatchRenewalService
@@ -25,12 +25,11 @@ def _require_admin(x_admin_token: str | None = Header(default=None)) -> None:
 async def renew_watches(
     db_manager: DBManager = Depends(get_db_manager),
     http_client: AsyncClient = Depends(get_http_client),
+    crypto: CryptoManager = Depends(get_crypto),
+    app_settings: Settings = Depends(get_settings),
 ) -> dict[str, int]:
-    crypto = CryptoManager.from_secret(
-        settings.encryption_master_key.get_secret_value(), settings.encryption_key_id
-    )
-    service = WatchRenewalService(db_manager, http_client, crypto, settings)
+    service = WatchRenewalService(db_manager, http_client, crypto, app_settings)
     renewed = await service.renew_expiring(
-        threshold=timedelta(hours=settings.watch_renew_threshold_hours)
+        threshold=timedelta(hours=app_settings.watch_renew_threshold_hours)
     )
     return {"renewed": renewed}

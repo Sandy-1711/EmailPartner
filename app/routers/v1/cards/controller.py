@@ -6,12 +6,18 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.config.settings import settings
-from app.dependencies import get_db_manager
+from app.config.settings import Settings
+from app.dependencies import (
+    get_db_manager,
+    get_image_provider,
+    get_llm_provider,
+    get_settings,
+    get_storage,
+)
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.images.main import build_image_provider
-from app.infrastructure.llm.main import build_llm_provider
-from app.infrastructure.storage.local import LocalBlobStorage
+from app.infrastructure.images.providers.base import ImageProvider
+from app.infrastructure.llm.providers.base import LLMProvider
+from app.infrastructure.storage.base import BlobStorage
 from app.models.api.cards import CardListResponse, EmailCard
 from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.storage import EmailStore
@@ -56,6 +62,10 @@ async def list_cards(
 async def retry_card(
     card_id: str,
     db_manager: DBManager = Depends(get_db_manager),
+    app_settings: Settings = Depends(get_settings),
+    storage: BlobStorage = Depends(get_storage),
+    llm: LLMProvider = Depends(get_llm_provider),
+    image: ImageProvider = Depends(get_image_provider),
 ) -> dict[str, str]:
     try:
         card_oid = ObjectId(card_id)
@@ -67,17 +77,6 @@ async def retry_card(
     if email is None:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    storage = LocalBlobStorage(
-        settings.local_storage_dir,
-        settings.local_storage_public_base_url,
-    )
-    api_key = settings.gemini_api_key.get_secret_value()
-    pipeline = EmailPipeline(
-        db_manager,
-        settings,
-        storage,
-        build_llm_provider(provider="gemini", api_key=api_key),
-        build_image_provider(provider=settings.image_provider, api_key=api_key),
-    )
+    pipeline = EmailPipeline(db_manager, app_settings, storage, llm, image)
     asyncio.create_task(pipeline.run(card_oid))
     return {"status": "scheduled", "card_id": card_id}
