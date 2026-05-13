@@ -77,9 +77,9 @@ class GmailAccountStore:
     ) -> None:
         update: dict[str, object] = {"updated_at": utc_now()}
         if access_token is not None:
-            update["access_token"] = access_token
+            update["access_token"] = access_token.model_dump(by_alias=True)
         if refresh_token is not None:
-            update["refresh_token"] = refresh_token
+            update["refresh_token"] = refresh_token.model_dump(by_alias=True)
         if access_expires_at is not None:
             update["access_token_expires_at"] = access_expires_at
         await self._db.update_one(
