@@ -28,6 +28,8 @@ class SummaryResult(BaseModel):
     tone: Literal[
         "informative", "urgent", "social", "promotional", "transactional"
     ]
+    image_caption: str
+    visual_concept: str
 
 
 class EmailPipeline:
@@ -90,7 +92,9 @@ class EmailPipeline:
         try:
             image = await ImageManager.generate(
                 prompt=build_illustration_prompt(
-                    headline=summary.headline, tone=summary.tone
+                    image_caption=summary.image_caption,
+                    visual_concept=summary.visual_concept,
+                    tone=summary.tone,
                 ),
                 provider=self._settings.image_provider,
                 model=self._settings.image_model,

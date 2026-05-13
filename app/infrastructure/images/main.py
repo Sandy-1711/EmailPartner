@@ -27,6 +27,6 @@ class ImageManager:
         *,
         provider: str,
         model: str,
-        size: tuple[int, int] = (1024, 1024),
+        size: tuple[int, int] = (1920, 1080),
     ) -> GeneratedImage:
         return await cls._get_provider(provider).generate(prompt, model, size)
