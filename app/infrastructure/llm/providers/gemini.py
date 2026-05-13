@@ -1,21 +1,20 @@
-from typing import AsyncGenerator, AsyncIterable
+from __future__ import annotations
+
+from typing import AsyncGenerator, AsyncIterable, TypeVar
 
 from google import genai
-from app.config.settings import settings
 from google.genai import types
 from google.genai.client import AsyncClient
 from pydantic import BaseModel
-from typing import TypeVar
+
+from app.infrastructure.llm.providers.base import LLMProvider
 
 GenericType = TypeVar("GenericType", bound=BaseModel)
 
 
-class GeminiProvider:
-
-    def __init__(self):
-        self.client: AsyncClient = genai.Client(
-            api_key=settings.gemini_api_key.get_secret_value()
-        ).aio
+class GeminiProvider(LLMProvider):
+    def __init__(self, api_key: str) -> None:
+        self._client: AsyncClient = genai.Client(api_key=api_key).aio
 
     async def generate_text_as_stream(
         self,
@@ -29,11 +28,10 @@ class GeminiProvider:
 
         response_stream: AsyncIterable[
             types.GenerateContentResponse
-        ] = await self.client.models.generate_content_stream(  # type: ignore
+        ] = await self._client.models.generate_content_stream(  # type: ignore[arg-type]
             model=model, contents=prompt, config=config
         )
 
-        chunk: types.GenerateContentResponse
         async for chunk in response_stream:
             if chunk.text is not None:
                 yield chunk.text
@@ -51,7 +49,7 @@ class GeminiProvider:
             response_schema=response_model,
         )
 
-        response = await self.client.models.generate_content( # type: ignore
+        response = await self._client.models.generate_content(
             model=model,
             contents=prompt,
             config=config,

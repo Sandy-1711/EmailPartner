@@ -1,32 +1,10 @@
 from __future__ import annotations
 
-from app.infrastructure.images.providers import (
-    GeminiImageProvider,
-    GeneratedImage,
-    ImageProvider,
-)
+from app.infrastructure.images.providers import GeminiImageProvider, ImageProvider
 
 
-class ImageManager:
-    _providers: dict[str, ImageProvider] = {}
-
-    @classmethod
-    def _get_provider(cls, provider: str) -> ImageProvider:
-        name = provider.strip().lower()
-        if name not in cls._providers:
-            if name == "gemini":
-                cls._providers[name] = GeminiImageProvider()
-            else:
-                raise ValueError(f"Unsupported image provider: {provider}")
-        return cls._providers[name]
-
-    @classmethod
-    async def generate(
-        cls,
-        prompt: str,
-        *,
-        provider: str,
-        model: str,
-        size: tuple[int, int] = (1920, 1080),
-    ) -> GeneratedImage:
-        return await cls._get_provider(provider).generate(prompt, model, size)
+def build_image_provider(*, provider: str, api_key: str) -> ImageProvider:
+    name = provider.strip().lower()
+    if name == "gemini":
+        return GeminiImageProvider(api_key=api_key)
+    raise ValueError(f"Unsupported image provider: {provider}")

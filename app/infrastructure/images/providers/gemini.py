@@ -3,7 +3,6 @@ from __future__ import annotations
 from google import genai
 from google.genai import types
 
-from app.config.settings import settings
 from app.infrastructure.images.providers.base import GeneratedImage, ImageProvider
 
 
@@ -23,10 +22,8 @@ def _aspect_ratio(size: tuple[int, int]) -> str:
 
 
 class GeminiImageProvider(ImageProvider):
-    def __init__(self) -> None:
-        self._client = genai.Client(
-            api_key=settings.gemini_api_key.get_secret_value()
-        ).aio
+    def __init__(self, api_key: str) -> None:
+        self._client = genai.Client(api_key=api_key).aio
 
     async def generate(
         self, prompt: str, model: str, size: tuple[int, int]

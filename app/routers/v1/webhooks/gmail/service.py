@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 
+from bson import ObjectId
 from httpx import AsyncClient, HTTPStatusError
 
 from app.config.settings import Settings
@@ -135,9 +136,9 @@ class GmailWebhookService:
                 updated_at=utc_now(),
             )
             email_id = await self._email_store.upsert_email(email_record)
-            asyncio.create_task(self._watch_service.watch_email(email_id)).add_done_callback(
-                _log_task_exception
-            )
+            asyncio.create_task(
+                self._watch_service.watch_email(ObjectId(email_id))
+            ).add_done_callback(_log_task_exception)
 
 
 def _log_task_exception(task: asyncio.Task[None]) -> None:
