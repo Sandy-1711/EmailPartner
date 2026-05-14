@@ -160,6 +160,7 @@ class EmailStore:
             )
             return ObjectId(inserted_id) if not isinstance(inserted_id, ObjectId) else inserted_id
 
+        payload.pop("_id", None)
         await self._db.update_one(
             Emails,
             {"_id": existing.id},
