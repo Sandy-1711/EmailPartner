@@ -1,14 +1,14 @@
 # EmailPartner
 
-Multi-user service that watches each user's Gmail and turns every new email into a "card" containing an AI-generated summary and illustration.
+Multi-user service that watches each user's Gmail and turns every new email into a "card": an AI-written headline and summary, a matching illustration, and a voice narration — shown live in a web feed.
 
 ## How it works
 
-1. User signs in with Google (OIDC + Gmail scopes in one consent).
+1. User signs in with Google (OIDC + Gmail scopes in one consent) from the frontend at `/`.
 2. We persist their refresh token (AES-GCM envelope encrypted) and start a Gmail `users.watch` against a Pub/Sub topic.
-3. Google pushes notifications to `POST /v1/webhooks/gmail/`. The webhook syncs history via `users.history.list`, fetches each new message with `format=full`, and queues processing.
-4. A background task per message: Gemini summarises the body (`headline`, `summary`, `tone`), Gemini/Imagen generates a matching illustration, both are persisted on the email row.
-5. `GET /v1/cards/` returns the populated cards.
+3. Google pushes notifications to `POST /v1/webhooks/gmail/`. The webhook syncs history via `users.history.list`, fetches each new message with `format=full`, and enqueues it (the email row in PENDING *is* the job).
+4. A durable worker claims pending rows: Gemini summarises the body (`headline`, `summary`, `tone`, `narration`), Gemini/Imagen paints a matching illustration, Gemini TTS reads the narration aloud — all persisted on the email row. Jobs survive restarts via a lease sweep.
+5. The frontend polls `GET /v1/cards/` and cards materialise in the feed as they finish.
 
 ## Quickstart (local)
 
@@ -39,22 +39,23 @@ https://<your-public-host>/v1/webhooks/gmail/?token=<PUBSUB_VERIFICATION_TOKEN>
 
 ### Sign in
 
-Open `http://localhost:8000/v1/auth/google/start` in a browser, complete consent, land on the callback. You'll receive an `ep_session` cookie; `GET /v1/auth/me` will then return your identity.
+Open `http://localhost:8000/` in a browser and click **Sign in with Google**. After consent you land back on the feed with an `ep_session` cookie set.
 
-Send yourself an email. Within ~30s, `GET /v1/cards/?user_id=<your-user-id>` returns it with `processing_status=ready`, a summarized `text`, and a `background_image_url` that loads from `/static/illustrations/...`.
+Send yourself an email. Within ~30s a card appears in the feed: it shimmers while the pipeline paints it, then flips to the finished illustration with a play button for the narration.
 
 ## Endpoints
 
 | Method | Path | Notes |
 |---|---|---|
+| GET  | `/` | Live card feed frontend |
 | GET  | `/v1/auth/google/start` | Returns Google OAuth URL (sign-in + Gmail in one consent) |
-| GET  | `/v1/auth/google/callback` | Exchanges code, verifies id_token, creates/links user, starts Gmail watch, sets session cookie |
+| GET  | `/v1/auth/google/callback` | Exchanges code, verifies id_token, creates/links user, starts Gmail watch, sets session cookie, redirects to `/` |
 | GET  | `/v1/auth/me` | Returns current user (requires session cookie) |
 | POST | `/v1/auth/logout` | Clears session cookie |
 | POST | `/v1/auth/delete-account` | Marks user deleted |
 | POST | `/v1/webhooks/gmail/` | Pub/Sub push target |
-| GET  | `/v1/cards/` | Lists cards for a user |
-| POST | `/v1/cards/{id}/retry` | Re-runs the pipeline for one card |
+| GET  | `/v1/cards/` | Lists cards (session cookie, or explicit `?user_id=`) |
+| POST | `/v1/cards/{id}/retry` | Requeues one card through the worker |
 | POST | `/v1/admin/watch/renew` | Manually renew expiring watches (gated by `X-Admin-Token`) |
 
 ## Architecture notes
@@ -63,8 +64,10 @@ Send yourself an email. Within ~30s, `GET /v1/cards/?user_id=<your-user-id>` ret
 - **Secrets at rest**: Gmail refresh/access tokens stored as `EncryptedBlob` (AES-GCM envelope). Master key from `ENCRYPTION_MASTER_KEY`.
 - **LLM**: `app/infrastructure/llm/` exposes a `LLMManager` with a `GeminiProvider`. The pipeline asks for a JSON-structured `SummaryResult`. Default model: `gemini-3.1-flash-lite` (overridable via `SUMMARY_MODEL`).
 - **Image gen**: `app/infrastructure/images/` exposes `ImageManager`. `GeminiImageProvider` covers both `imagen-*` (`generate_images`) and `gemini-*-image*` (`generate_content` with IMAGE+TEXT modalities). The model name picks the API path. Default model: `gemini-2.5-flash-image-preview` ("Nano Banana"), overridable via `IMAGE_MODEL`.
+- **Audio**: `LLMProvider.synthesize_speech` renders the summary's `narration` script via Gemini TTS (default `gemini-2.5-flash-preview-tts`, voice `Kore`; override with `TTS_MODEL`/`TTS_VOICE`, disable with `ENABLE_AUDIO_NARRATION=false`). Raw PCM is wrapped as WAV and stored next to the illustration.
 - **Storage**: `app/infrastructure/storage/` Protocol + `LocalBlobStorage` (writes to `LOCAL_STORAGE_DIR`, served from `/static/illustrations`). Swap to a GCS/S3 implementation by adding one class.
-- **Async**: Pub/Sub webhook returns 200 immediately; `asyncio.create_task` runs the summary + image pipeline in-process. Single-instance only; for horizontal scale move to a queue.
+- **Durable queue**: the webhook only upserts email rows as PENDING and nudges `PipelineWorker` (`app/services/queue/worker.py`). Workers claim rows atomically (`find_one_and_update`, attempts + lease timestamp) and the startup sweep requeues PROCESSING rows whose lease expired — so in-flight jobs survive restarts. Tune with `PIPELINE_CONCURRENCY`, `PIPELINE_POLL_INTERVAL_SECONDS`, `PIPELINE_LEASE_SECONDS`, `PIPELINE_MAX_ATTEMPTS`. Multiple app instances can share the queue; claims are atomic.
+- **Frontend**: a single-file page (`app/static/index.html`, no build step) served at `/`. Polls `/v1/cards/` every 4s, diffing by status so finished cards swap in place and new ones animate in.
 - **Watch renewal**: Lifespan starts an hourly loop in `WatchRenewalService` that re-issues `users.watch` for accounts within 24h of expiration. Disable with `ENABLE_BACKGROUND_JOBS=false` (e.g. in tests).
 - **Retries**: Tenacity wraps `Gmail.list_history`, `Gmail.get_message`, and `OAuthClient.refresh_access_token` (3 attempts, exponential backoff, 429/5xx + transport errors).
 
@@ -75,10 +78,16 @@ docker build -t emailpartner .
 docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/var:/app/var" emailpartner
 ```
 
+## Tests
+
+```bash
+pip install -r req-dev.txt
+pytest
+```
+
+Unit tests run against an in-memory `DocumentDBManager` fake — no Mongo or network needed. Covered: queue claim/lease/requeue semantics, pipeline failure modes (summary/image/TTS), crypto envelope roundtrip, session signing, WAV packaging.
+
 ## What's not here yet
 
-- Audio narration (model has `card_audio_url` but it isn't generated).
-- Durable queue (current `asyncio.create_task` is in-process; jobs lost on restart).
 - Cloud blob storage (Local FS only; abstraction in place).
-- Tests.
-- A frontend.
+- Push updates to the frontend (currently 4s polling; SSE would be the next step).
