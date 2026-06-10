@@ -1,6 +1,6 @@
 # Mobile app handoff — pick up from here
 
-State as of 2026-06-10. Backend is **feature-complete and tested**; the Expo app is **fully written and type-checks clean**, but has **never been built or run** — that's the next step.
+State as of 2026-06-10 (evening). Backend is **feature-complete and tested**; the Expo app is **written, type-checks clean, and the debug APK builds successfully** — what's left is running it on an emulator/device.
 
 ## What exists and works (all committed on `master`)
 
@@ -27,30 +27,32 @@ State as of 2026-06-10. Backend is **feature-complete and tested**; the Expo app
 
 ## What remains (in order)
 
-1. **Build the Android app** (never done yet — expect issues here):
-   ```bash
-   cd mobile
-   npx expo prebuild --platform android   # generates android/ from app.config.ts
-   cd android && ./gradlew assembleDebug  # or: npx expo run:android with device/emulator
-   ```
-   Machine has: Node 22, JDK 17, Android SDK at `%LOCALAPPDATA%\Android\Sdk` (platforms 31/33/34), **no AVDs, no device attached** — create an AVD or plug in a phone (`adb devices`).
-   APK lands at `mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
+1. **Build the Android app — ✅ DONE 2026-06-10.** `expo prebuild` + `gradlew assembleDebug` both succeeded; APK at `mobile/android/app/build/outputs/apk/debug/app-debug.apk` (137 MB, debug).
+   Environment fixes that made it work (already applied to this machine):
+   - System `JAVA_HOME` points at a nonexistent `C:\Program Files\Java\jdk-19` — **always build with** `JAVA_HOME="C:\Program Files\Microsoft\jdk-17.0.10.7-hotspot" ./gradlew assembleDebug`.
+   - SDK's `ndk/27.1.12297006` was a corrupt 1 KB husk → deleted; AGP auto-reinstalled it properly during the build.
+   - AVD **`ep_test`** (android-31 google_apis x86_64) was created manually (legacy avdmanager breaks on JDK 17; its two INI files were written by hand in `~/.android/avd/`). Boot with:
+     `%LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe -avd ep_test -no-snapshot -gpu swiftshader_indirect`
+   - Debug manifest already has `usesCleartextTraffic=true`, so plain `http://10.0.2.2:8000` works on the emulator in debug builds.
 
-2. **End-to-end test on device/emulator:**
-   - Backend up: `uvicorn app.main:app` + MongoDB + (for real Gmail pushes) ngrok.
+2. **NEXT STEP — smoke test on emulator/device (nothing run yet):**
+   - Boot `ep_test` (command above), wait for `adb shell getprop sys.boot_completed` = 1, then `adb install mobile/android/app/build/outputs/apk/debug/app-debug.apk` and launch `com.emailpartner.app`.
+   - Verify: sign-in screen renders → deep link `adb shell am start -a android.intent.action.VIEW -d "emailpartner://auth?token=test"` flips to feed → widget appears in launcher picker.
+
+3. **End-to-end test (needs backend):**
+   - Backend up: `uvicorn app.main:app` + MongoDB (not installed on this machine — Docker Desktop exists but wasn't running) + ngrok for real Gmail pushes.
    - Emulator reaches host via `http://10.0.2.2:8000` (the app default). Real phone needs the ngrok HTTPS URL typed into the sign-in screen.
-   - NOTE: `android.usesCleartextTraffic` may be needed for plain-http 10.0.2.2 — if sign-in fetch fails on emulator with cleartext error, add `"android": { "usesCleartextTraffic": true }` via `expo-build-properties` plugin or use the ngrok https URL even on emulator.
    - Sign in → browser → Google → should bounce back into the app with token. Feed should show cards; play button streams WAV.
    - Add the widget from the launcher's widget picker ("EmailPartner") → shows latest card art + glass panel → tap → app opens and narrates.
 
-3. **Known risks / things not yet verified:**
+4. **Known risks / things not yet verified:**
    - `expo-audio` API names (`createAudioPlayer`, `setAudioModeAsync`, `playbackStatusUpdate`, `status.didJustFinish`) — verify against SDK 56 docs (https://docs.expo.dev/versions/v56.0.0/sdk/audio/) if playback misbehaves; tsc passed so shapes exist.
    - Widget headless fetch: SecureStore + fetch inside `widgetTaskHandler` should work (runs in app process) but is unverified.
    - `ImageWidget` with network image needs INTERNET perm (Expo adds it by default).
    - Gmail OAuth refresh tokens expire after 7 days while the Google OAuth consent screen is in Testing mode — re-sign-in, or publish the app in Google Cloud console.
    - The user's existing Gmail account row had a dead refresh token (invalid_grant in renewal loop) — re-sign-in fixes; optional hardening: mark account on invalid_grant instead of hourly retry-spam (discussed, not built).
 
-4. **Nice-to-haves discussed, not started:** README section for `mobile/`, GCS blob storage, SSE instead of polling (web), narration playback directly from widget without opening the app (needs foreground service).
+5. **Nice-to-haves discussed, not started:** GCS blob storage, SSE instead of polling (web), narration playback directly from widget without opening the app (needs foreground service), invalid_grant hardening in the watch renewal loop. (README mobile section: done.)
 
 ## Conventions
 - Granular conventional commits (`feat(mobile): …`), NO Co-Authored-By trailer.
