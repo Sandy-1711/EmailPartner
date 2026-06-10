@@ -11,7 +11,7 @@ from app.infrastructure.db.main import DBManager
 from app.infrastructure.images.providers.base import ImageProvider
 from app.infrastructure.llm.providers.base import LLMProvider
 from app.infrastructure.storage.base import BlobStorage
-from app.models.db.emails import EmailProcessingStatus
+from app.models.db.emails import EmailProcessingStatus, Emails
 from app.services.pipeline.prompts import (
     EMAIL_SUMMARY_SYSTEM,
     build_illustration_prompt,
@@ -47,16 +47,9 @@ class EmailPipeline:
         self._llm = llm
         self._image = image
 
-    async def run(self, email_id: ObjectId) -> None:
-        email = await self._email_store.get_by_id(email_id)
-        if email is None:
-            logger.warning("EmailPipeline: email %s not found", email_id)
-            return
-
-        await self._email_store.update_card_fields(
-            email_id, processing_status=EmailProcessingStatus.PROCESSING
-        )
-
+    async def process(self, email: Emails) -> None:
+        """Turn one claimed email into a finished card (status PROCESSING -> READY/FAILED)."""
+        email_id = email.id
         try:
             result = await self._llm.generate_structured_output(
                 prompt=build_summary_prompt(email, self._settings.summary_max_body_chars),
@@ -64,10 +57,12 @@ class EmailPipeline:
                 model=self._settings.summary_model,
                 response_model=SummaryResult,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("EmailPipeline: summary generation failed for %s", email_id)
             await self._email_store.update_card_fields(
-                email_id, processing_status=EmailProcessingStatus.FAILED
+                email_id,
+                processing_status=EmailProcessingStatus.FAILED,
+                last_error=f"summary: {exc}",
             )
             return
 
@@ -116,3 +111,4 @@ class EmailPipeline:
                 "EmailPipeline: illustration upload failed for %s", email_oid
             )
             return None
+

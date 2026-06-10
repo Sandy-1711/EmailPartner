@@ -1,25 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.config.settings import Settings
-from app.dependencies import (
-    get_db_manager,
-    get_image_provider,
-    get_llm_provider,
-    get_settings,
-    get_storage,
-)
+from app.dependencies import get_db_manager, get_pipeline_worker
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.images.providers.base import ImageProvider
-from app.infrastructure.llm.providers.base import LLMProvider
-from app.infrastructure.storage.base import BlobStorage
 from app.models.api.cards import CardListResponse, EmailCard
-from app.services.pipeline.email_pipeline import EmailPipeline
+from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -62,10 +50,7 @@ async def list_cards(
 async def retry_card(
     card_id: str,
     db_manager: DBManager = Depends(get_db_manager),
-    app_settings: Settings = Depends(get_settings),
-    storage: BlobStorage = Depends(get_storage),
-    llm: LLMProvider = Depends(get_llm_provider),
-    image: ImageProvider = Depends(get_image_provider),
+    worker: PipelineWorker = Depends(get_pipeline_worker),
 ) -> dict[str, str]:
     try:
         card_oid = ObjectId(card_id)
@@ -77,6 +62,6 @@ async def retry_card(
     if email is None:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    pipeline = EmailPipeline(db_manager, app_settings, storage, llm, image)
-    asyncio.create_task(pipeline.run(card_oid))
+    await store.requeue(card_oid)
+    worker.notify()
     return {"status": "scheduled", "card_id": card_id}

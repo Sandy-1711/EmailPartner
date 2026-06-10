@@ -11,6 +11,7 @@ from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.infrastructure.storage.base import BlobStorage
+from app.services.queue.worker import PipelineWorker
 
 
 def _from_state(request: Request, attr: str, friendly: str):
@@ -56,6 +57,10 @@ def get_storage(request: Request) -> BlobStorage:
     return _from_state(request, "storage", "BlobStorage")
 
 
+def get_pipeline_worker(request: Request) -> PipelineWorker:
+    return _from_state(request, "pipeline_worker", "PipelineWorker")
+
+
 def get_auth_service(
     db_manager: DBManager = Depends(get_db_manager),
     http_client: AsyncClient = Depends(get_http_client),
@@ -76,12 +81,8 @@ def get_webhook_service(
     http_client: AsyncClient = Depends(get_http_client),
     crypto: CryptoManager = Depends(get_crypto),
     settings: Settings = Depends(get_settings),
-    llm: LLMProvider = Depends(get_llm_provider),
-    image: ImageProvider = Depends(get_image_provider),
-    storage: BlobStorage = Depends(get_storage),
+    worker: PipelineWorker = Depends(get_pipeline_worker),
 ):
     from app.routers.v1.webhooks.gmail.service import GmailWebhookService
 
-    return GmailWebhookService(
-        db_manager, http_client, crypto, settings, llm, image, storage
-    )
+    return GmailWebhookService(db_manager, http_client, crypto, settings, worker)

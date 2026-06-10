@@ -81,6 +81,19 @@ class Settings(BaseSettings):
         int, Field(validation_alias="SUMMARY_MAX_BODY_CHARS", default=8000)
     ]
 
+    pipeline_concurrency: Annotated[
+        int, Field(validation_alias="PIPELINE_CONCURRENCY", default=2)
+    ]
+    pipeline_poll_interval_seconds: Annotated[
+        float, Field(validation_alias="PIPELINE_POLL_INTERVAL_SECONDS", default=15.0)
+    ]
+    pipeline_lease_seconds: Annotated[
+        int, Field(validation_alias="PIPELINE_LEASE_SECONDS", default=600)
+    ]
+    pipeline_max_attempts: Annotated[
+        int, Field(validation_alias="PIPELINE_MAX_ATTEMPTS", default=5)
+    ]
+
     image_provider: Annotated[
         str, Field(validation_alias="IMAGE_PROVIDER", default="gemini")
     ]

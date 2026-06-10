@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import logging
@@ -18,15 +17,12 @@ from app.infrastructure.google.gmail import (
     extract_plain_text,
 )
 from app.infrastructure.google.oauth import OAuthClient
-from app.infrastructure.images.providers.base import ImageProvider
-from app.infrastructure.llm.providers.base import LLMProvider
 from app.infrastructure.security.crypto import CryptoManager
-from app.infrastructure.storage.base import BlobStorage
 from app.models.api.webhooks import GmailNotification, PubSubPushBody
 from app.models.db.emails import Emails
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.utils import utc_now
-from app.services.pipeline.email_pipeline import EmailPipeline
+from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore, GmailAccountStore
 
 logger = logging.getLogger(__name__)
@@ -39,17 +35,15 @@ class GmailWebhookService:
         http_client: AsyncClient,
         crypto: CryptoManager,
         settings: Settings,
-        llm: LLMProvider,
-        image: ImageProvider,
-        storage: BlobStorage,
+        worker: PipelineWorker,
     ) -> None:
         self._db_manager = db_manager
         self._http_client = http_client
         self._crypto = crypto
         self._settings = settings
+        self._worker = worker
         self._gmail_store = GmailAccountStore(db_manager)
         self._email_store = EmailStore(db_manager)
-        self._pipeline = EmailPipeline(db_manager, settings, storage, llm, image)
 
     async def handle_push(self, body: PubSubPushBody) -> None:
         notification = self._parse_notification(body)
@@ -119,6 +113,7 @@ class GmailWebhookService:
             for added in item.messages_added:
                 message_ids.append(added.message.id)
 
+        enqueued = 0
         for message_id in message_ids:
             message = await gmail_client.get_message(message_id, format="full")
             subject = _get_header(message, "Subject")
@@ -140,18 +135,11 @@ class GmailWebhookService:
                 created_at=utc_now(),
                 updated_at=utc_now(),
             )
-            email_id = await self._email_store.upsert_email(email_record)
-            asyncio.create_task(
-                self._pipeline.run(email_id)
-            ).add_done_callback(_log_task_exception)
-
-
-def _log_task_exception(task: asyncio.Task[None]) -> None:
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.exception("Background email task failed", exc_info=exc)
+            _, is_new = await self._email_store.upsert_email(email_record)
+            if is_new:
+                enqueued += 1
+        if enqueued:
+            self._worker.notify()
 
 
 def _get_header(message: GmailMessage, name: str) -> str | None:

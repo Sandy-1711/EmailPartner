@@ -20,6 +20,8 @@ from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.infrastructure.storage.local import LocalBlobStorage
 from app.routers.v1 import router as v1_router
+from app.services.pipeline.email_pipeline import EmailPipeline
+from app.services.queue.worker import PipelineWorker
 from app.services.watch.renewal import WatchRenewalService
 
 logger = logging.getLogger(__name__)
@@ -81,8 +83,27 @@ async def lifespan(app: FastAPI):
         settings.local_storage_dir, settings.local_storage_public_base_url
     )
 
+    pipeline = EmailPipeline(
+        app.state.db_manager,
+        settings,
+        app.state.storage,
+        app.state.llm_provider,
+        app.state.image_provider,
+    )
+    app.state.pipeline_worker = PipelineWorker(
+        app.state.db_manager,
+        pipeline,
+        concurrency=settings.pipeline_concurrency,
+        poll_interval_seconds=settings.pipeline_poll_interval_seconds,
+        lease_seconds=settings.pipeline_lease_seconds,
+        max_attempts=settings.pipeline_max_attempts,
+    )
+
     renewal_task: asyncio.Task[None] | None = None
+    worker_started = False
     if settings.enable_background_jobs:
+        await app.state.pipeline_worker.start()
+        worker_started = True
         renewal_task = asyncio.create_task(
             _watch_renewal_loop(
                 app.state.db_manager, app.state.http_client, app.state.crypto
@@ -92,6 +113,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if worker_started:
+            await app.state.pipeline_worker.stop()
         if renewal_task is not None:
             renewal_task.cancel()
             try:
