@@ -3,6 +3,7 @@ from __future__ import annotations
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
+from fastapi.responses import RedirectResponse
 
 from app.config.settings import settings
 from app.dependencies import (
@@ -14,7 +15,6 @@ from app.infrastructure.db.main import DBManager
 from app.infrastructure.security.session import SessionManager
 from app.models.api.auth import (
     DeleteAccountRequest,
-    GoogleSignInCallbackResponse,
     GoogleSignInStartResponse,
     MeResponse,
 )
@@ -31,22 +31,22 @@ async def google_signin_start(
     return await service.google_signin_start()
 
 
-@router.get("/google/callback", response_model=GoogleSignInCallbackResponse)
+@router.get("/google/callback")
 async def google_signin_callback(
-    response: Response,
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     service: AuthService = Depends(get_auth_service),
-) -> GoogleSignInCallbackResponse:
+) -> RedirectResponse:
     if error:
         raise HTTPException(status_code=400, detail=error)
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    payload, session_token = await service.handle_google_signin_callback(
+    _, session_token = await service.handle_google_signin_callback(
         code=code, state=state
     )
+    response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         key=settings.session_cookie_name,
         value=session_token,
@@ -55,7 +55,7 @@ async def google_signin_callback(
         secure=settings.session_cookie_secure,
         samesite="lax",
     )
-    return payload
+    return response
 
 
 @router.get("/me", response_model=MeResponse)
