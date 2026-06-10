@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -25,9 +27,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/google/start", response_model=GoogleSignInStartResponse)
 async def google_signin_start(
+    client: str = Query(default="web", pattern="^(web|mobile)$"),
     service: AuthService = Depends(get_auth_service),
 ) -> GoogleSignInStartResponse:
-    return await service.google_signin_start()
+    return await service.google_signin_start(client=client)
 
 
 @router.get("/google/callback")
@@ -42,9 +45,14 @@ async def google_signin_callback(
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    _, session_token = await service.handle_google_signin_callback(
+    _, session_token, client = await service.handle_google_signin_callback(
         code=code, state=state
     )
+    if client == "mobile":
+        # Hand the session token to the app via its deep link; no cookie needed.
+        return RedirectResponse(
+            url=f"emailpartner://auth?token={quote(session_token)}", status_code=303
+        )
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         key=settings.session_cookie_name,

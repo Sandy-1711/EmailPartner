@@ -49,17 +49,18 @@ class AuthService:
         self._user_store = UserStore(db_manager)
         self._gmail_store = GmailAccountStore(db_manager)
 
-    async def google_signin_start(self) -> GoogleSignInStartResponse:
-        state = self._state_manager.create_state({"mode": "signin"})
+    async def google_signin_start(self, client: str = "web") -> GoogleSignInStartResponse:
+        state = self._state_manager.create_state({"mode": "signin", "client": client})
         oauth_client = OAuthClient(self._settings)
         return GoogleSignInStartResponse(auth_url=oauth_client.build_authorization_url(state))
 
     async def handle_google_signin_callback(
         self, *, code: str, state: str
-    ) -> tuple[GoogleSignInCallbackResponse, str]:
+    ) -> tuple[GoogleSignInCallbackResponse, str, str]:
         payload = self._state_manager.verify_state_payload(state)
         if payload is None or payload.get("mode") != "signin":
             raise HTTPException(status_code=400, detail="Invalid or expired state")
+        client = str(payload.get("client") or "web")
 
         oauth_client = OAuthClient(self._settings)
         token_response = await oauth_client.exchange_code(self._http_client, code)
@@ -111,6 +112,7 @@ class AuthService:
                 gmail_address=gmail_address,
             ),
             session_token,
+            client,
         )
 
     async def _verify_id_token(self, token: str):
