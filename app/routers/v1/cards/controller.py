@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
 
-from app.dependencies import get_db_manager, get_pipeline_worker
+from app.config.settings import settings
+from app.dependencies import (
+    get_db_manager,
+    get_pipeline_worker,
+    get_session_manager,
+)
 from app.infrastructure.db.main import DBManager
+from app.infrastructure.security.session import SessionManager
 from app.models.api.cards import CardListResponse, EmailCard
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
@@ -13,15 +19,30 @@ from app.services.storage import EmailStore
 router = APIRouter(prefix="/cards", tags=["cards"])
 
 
+def get_session_user_id(
+    session_manager: SessionManager = Depends(get_session_manager),
+    session_cookie: str | None = Cookie(
+        default=None, alias=settings.session_cookie_name
+    ),
+) -> str | None:
+    if session_cookie is None:
+        return None
+    return session_manager.verify_session(session_cookie)
+
+
 @router.get("/", response_model=CardListResponse)
 async def list_cards(
-    user_id: str = Query(...),
+    user_id: str | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db_manager: DBManager = Depends(get_db_manager),
+    session_user_id: str | None = Depends(get_session_user_id),
 ) -> CardListResponse:
+    effective_user_id = user_id or session_user_id
+    if effective_user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in or pass user_id")
     try:
-        user_oid = ObjectId(user_id)
+        user_oid = ObjectId(effective_user_id)
     except InvalidId as exc:
         raise HTTPException(status_code=400, detail="Invalid user_id") from exc
 
