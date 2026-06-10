@@ -5,7 +5,7 @@ from app.models.db.emails import Emails
 
 EMAIL_SUMMARY_SYSTEM = (
     "You are an assistant that distills an email into a glanceable card. "
-    "Return a structured response with five fields, all in English:\n"
+    "Return a structured response with six fields, all in English:\n"
     "- headline: max 8 words, the core ask or news (sentence case, no end punctuation).\n"
     "- summary: 1-3 sentences in plain English, no greetings or sign-offs.\n"
     "- tone: one of informative, urgent, social, promotional, transactional — chosen from the email's content.\n"
@@ -20,6 +20,11 @@ EMAIL_SUMMARY_SYSTEM = (
     "\"an envelope with falling paper confetti\", "
     "\"a calendar page with a circled date and a coffee cup\", "
     "\"a green checkmark stamp pressed onto a paper receipt\".\n"
+    "- narration: a 1-3 sentence spoken script addressed to the user in second person, "
+    "as a warm personal assistant briefing them aloud. Conversational, concrete, no markdown, "
+    "no emoji, no URLs; spell out anything that would sound wrong read aloud. "
+    "Example: \"Sarah from Acme wants to move your demo to Friday afternoon. "
+    "She asked you to confirm by tomorrow.\"\n"
     "Ignore signatures, legal disclaimers, and unsubscribe footers."
 )
 

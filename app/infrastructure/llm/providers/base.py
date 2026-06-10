@@ -27,3 +27,13 @@ class LLMProvider(ABC):
         system_instructions: str,
     ) -> AsyncGenerator[str, None]:
         ...
+
+    @abstractmethod
+    async def synthesize_speech(
+        self,
+        text: str,
+        model: str,
+        voice: str,
+    ) -> bytes:
+        """Render ``text`` as spoken audio and return playable WAV bytes."""
+        ...

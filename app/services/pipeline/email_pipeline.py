@@ -30,6 +30,7 @@ class SummaryResult(BaseModel):
     ]
     image_caption: str
     visual_concept: str
+    narration: str
 
 
 class EmailPipeline:
@@ -70,12 +71,16 @@ class EmailPipeline:
         card_background_url = await self._try_generate_illustration(
             email_id, str(email.user_id), result
         )
+        card_audio_url = await self._try_generate_narration(
+            email_id, str(email.user_id), result
+        )
 
         await self._email_store.update_card_fields(
             email_id,
             processing_status=EmailProcessingStatus.READY,
             card_text=card_text,
             card_background_url=card_background_url,
+            card_audio_url=card_audio_url,
         )
         logger.info("EmailPipeline: ready %s", email_id)
 
@@ -110,5 +115,33 @@ class EmailPipeline:
             logger.exception(
                 "EmailPipeline: illustration upload failed for %s", email_oid
             )
+            return None
+
+    async def _try_generate_narration(
+        self,
+        email_oid: ObjectId,
+        user_id: str,
+        summary: SummaryResult,
+    ) -> str | None:
+        if not self._settings.enable_audio_narration:
+            return None
+        script = summary.narration.strip() or f"{summary.headline}. {summary.summary}"
+        try:
+            audio = await self._llm.synthesize_speech(
+                text=script,
+                model=self._settings.tts_model,
+                voice=self._settings.tts_voice,
+            )
+        except Exception:
+            logger.exception(
+                "EmailPipeline: narration generation failed for %s", email_oid
+            )
+            return None
+
+        key = f"users/{user_id}/emails/{email_oid}.wav"
+        try:
+            return await self._storage.put(key, audio, "audio/wav")
+        except Exception:
+            logger.exception("EmailPipeline: narration upload failed for %s", email_oid)
             return None
 

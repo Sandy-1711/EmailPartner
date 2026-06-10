@@ -81,6 +81,14 @@ class Settings(BaseSettings):
         int, Field(validation_alias="SUMMARY_MAX_BODY_CHARS", default=8000)
     ]
 
+    tts_model: Annotated[
+        str, Field(validation_alias="TTS_MODEL", default="gemini-2.5-flash-preview-tts")
+    ]
+    tts_voice: Annotated[str, Field(validation_alias="TTS_VOICE", default="Kore")]
+    enable_audio_narration: Annotated[
+        bool, Field(validation_alias="ENABLE_AUDIO_NARRATION", default=True)
+    ]
+
     pipeline_concurrency: Annotated[
         int, Field(validation_alias="PIPELINE_CONCURRENCY", default=2)
     ]
