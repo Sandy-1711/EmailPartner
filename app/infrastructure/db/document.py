@@ -48,6 +48,7 @@ class DocumentDBManager(ABC):
         *,
         limit: int | None = None,
         skip: int | None = None,
+        sort: Sequence[tuple[str, int]] | None = None,
     ) -> list[GenericType]:
         raise NotImplementedError
 
@@ -58,6 +59,19 @@ class DocumentDBManager(ABC):
         query: Mapping[str, Any],
         update: Mapping[str, Any],
     ) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def find_one_and_update(
+        self,
+        collection: type[GenericType],
+        query: Mapping[str, Any],
+        update: Mapping[str, Any],
+        *,
+        sort: Sequence[tuple[str, int]] | None = None,
+        return_updated: bool = True,
+    ) -> GenericType | None:
+        """Atomically update the first matching document and return it."""
         raise NotImplementedError
 
     @abstractmethod

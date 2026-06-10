@@ -4,7 +4,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from pydantic import BaseModel
 
-from pymongo import AsyncMongoClient
+from pymongo import AsyncMongoClient, ReturnDocument
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 
@@ -94,8 +94,11 @@ class MongoDBManager(DocumentDBManager):
         *,
         limit: int | None = None,
         skip: int | None = None,
+        sort: Sequence[tuple[str, int]] | None = None,
     ) -> list[GenericType]:
         cursor = self._get_collection_by_type(collection).find(query, projection)
+        if sort is not None:
+            cursor = cursor.sort(list(sort))
         if skip is not None:
             cursor = cursor.skip(skip)
         if limit is not None:
@@ -110,6 +113,25 @@ class MongoDBManager(DocumentDBManager):
     ) -> int:
         result = await self._get_collection_by_type(collection).update_one(query, update)
         return result.modified_count
+
+    async def find_one_and_update(
+        self,
+        collection: type[GenericType],
+        query: Mapping[str, Any],
+        update: Mapping[str, Any],
+        *,
+        sort: Sequence[tuple[str, int]] | None = None,
+        return_updated: bool = True,
+    ) -> GenericType | None:
+        document = await self._get_collection_by_type(collection).find_one_and_update(
+            query,
+            update,
+            sort=list(sort) if sort is not None else None,
+            return_document=ReturnDocument.AFTER if return_updated else ReturnDocument.BEFORE,
+        )
+        if document is None:
+            return None
+        return collection.model_validate(document)
 
     async def upsert_one(
         self,
