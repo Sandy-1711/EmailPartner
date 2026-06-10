@@ -131,6 +131,7 @@ class EmailStore:
         card_text: str | None = None,
         card_background_url: str | None = None,
         card_audio_url: str | None = None,
+        last_error: str | None = None,
     ) -> None:
         update: dict[str, object] = {"updated_at": utc_now()}
         if processing_status is not None:
@@ -141,32 +142,45 @@ class EmailStore:
             update["card_background_url"] = card_background_url
         if card_audio_url is not None:
             update["card_audio_url"] = card_audio_url
+        if last_error is not None:
+            update["last_error"] = last_error
         await self._db.update_one(
             Emails,
             {"_id": email_id},
             {"$set": update},
         )
 
-    async def upsert_email(self, email: Emails) -> ObjectId:
+    async def upsert_email(self, email: Emails) -> tuple[ObjectId, bool]:
+        """Insert or refresh an email row. Returns (id, is_new).
+
+        Existing rows only get their message-content fields refreshed; card
+        fields and queue state are left untouched so duplicate Pub/Sub
+        notifications don't reset finished cards.
+        """
         existing = await self._db.find_one(
             Emails, {"gmail_message_id": email.gmail_message_id}
         )
-        payload = email.model_dump(by_alias=True, exclude_none=True)
-        payload["updated_at"] = utc_now()
         if existing is None:
+            payload = email.model_dump(by_alias=True, exclude_none=True)
+            payload["updated_at"] = utc_now()
             payload["created_at"] = email.created_at
             inserted_id = await self._db.insert_one(
                 Emails, Emails.model_validate(payload)
             )
-            return ObjectId(inserted_id) if not isinstance(inserted_id, ObjectId) else inserted_id
+            oid = ObjectId(inserted_id) if not isinstance(inserted_id, ObjectId) else inserted_id
+            return oid, True
 
-        payload.pop("_id", None)
+        content_fields = (
+            "thread_id", "subject", "from_email", "snippet", "body", "received_at"
+        )
+        payload = email.model_dump(include=set(content_fields), exclude_none=True)
+        payload["updated_at"] = utc_now()
         await self._db.update_one(
             Emails,
             {"_id": existing.id},
             {"$set": payload},
         )
-        return existing.id
+        return existing.id, False
 
     async def list_by_user(
         self, user_id: ObjectId, limit: int, offset: int
@@ -176,4 +190,61 @@ class EmailStore:
             {"user_id": user_id},
             limit=limit,
             skip=offset,
+            sort=[("received_at", -1), ("created_at", -1)],
         )
+
+    async def claim_next_pending(self) -> Emails | None:
+        """Atomically claim the oldest pending email for processing."""
+        now = utc_now()
+        return await self._db.find_one_and_update(
+            Emails,
+            {"processing_status": EmailProcessingStatus.PENDING.value},
+            {
+                "$set": {
+                    "processing_status": EmailProcessingStatus.PROCESSING.value,
+                    "claimed_at": now,
+                    "updated_at": now,
+                },
+                "$inc": {"attempts": 1},
+            },
+            sort=[("created_at", 1)],
+        )
+
+    async def requeue(self, email_id: ObjectId) -> None:
+        await self._db.update_one(
+            Emails,
+            {"_id": email_id},
+            {
+                "$set": {
+                    "processing_status": EmailProcessingStatus.PENDING.value,
+                    "claimed_at": None,
+                    "last_error": None,
+                    "updated_at": utc_now(),
+                }
+            },
+        )
+
+    async def reset_stale_processing(self, claimed_before: datetime) -> int:
+        """Requeue emails stuck in PROCESSING past their lease (e.g. after a crash)."""
+        reset = 0
+        while True:
+            stale = await self._db.find_one_and_update(
+                Emails,
+                {
+                    "processing_status": EmailProcessingStatus.PROCESSING.value,
+                    "$or": [
+                        {"claimed_at": {"$lt": claimed_before}},
+                        {"claimed_at": None},
+                    ],
+                },
+                {
+                    "$set": {
+                        "processing_status": EmailProcessingStatus.PENDING.value,
+                        "claimed_at": None,
+                        "updated_at": utc_now(),
+                    }
+                },
+            )
+            if stale is None:
+                return reset
+            reset += 1

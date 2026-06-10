@@ -34,6 +34,9 @@ class Emails(ConfigModels.EmailPartnerDBConfig):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     processing_status: EmailProcessingStatus = EmailProcessingStatus.PENDING
+    attempts: int = 0
+    claimed_at: datetime | None = None
+    last_error: str | None = None
     card_background_url: str | None = None
     card_text: str | None = None
     card_audio_url: str | None = None
