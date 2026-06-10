@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 
 from app.config.settings import settings
 from app.dependencies import (
     get_auth_service,
     get_db_manager,
-    get_session_manager,
+    get_session_user_id,
 )
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.security.session import SessionManager
 from app.models.api.auth import (
     DeleteAccountRequest,
     GoogleSignInStartResponse,
@@ -61,15 +60,10 @@ async def google_signin_callback(
 @router.get("/me", response_model=MeResponse)
 async def me(
     db_manager: DBManager = Depends(get_db_manager),
-    session_manager: SessionManager = Depends(get_session_manager),
-    session_cookie: str | None = Cookie(default=None, alias=settings.session_cookie_name),
+    user_id: str | None = Depends(get_session_user_id),
 ) -> MeResponse:
-    if session_cookie is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user_id = session_manager.verify_session(session_cookie)
     if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         user_oid = ObjectId(user_id)

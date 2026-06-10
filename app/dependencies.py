@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from fastapi import Cookie, Depends, Header, Request
 from httpx import AsyncClient
 
-from app.config.settings import Settings
+from app.config.settings import Settings, settings
 from app.infrastructure.db.main import DBManager
 from app.infrastructure.images.providers.base import ImageProvider
 from app.infrastructure.llm.providers.base import LLMProvider
@@ -59,6 +59,26 @@ def get_storage(request: Request) -> BlobStorage:
 
 def get_pipeline_worker(request: Request) -> PipelineWorker:
     return _from_state(request, "pipeline_worker", "PipelineWorker")
+
+
+def get_session_user_id(
+    session_manager: SessionManager = Depends(get_session_manager),
+    session_cookie: str | None = Cookie(
+        default=None, alias=settings.session_cookie_name
+    ),
+    authorization: str | None = Header(default=None),
+) -> str | None:
+    """Resolve the signed-in user from the session cookie or a Bearer token.
+
+    The web frontend uses the cookie; the mobile app sends the same session
+    token as `Authorization: Bearer <token>`.
+    """
+    token = session_cookie
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        return None
+    return session_manager.verify_session(token)
 
 
 def get_auth_service(

@@ -2,32 +2,19 @@ from __future__ import annotations
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.config.settings import settings
 from app.dependencies import (
     get_db_manager,
     get_pipeline_worker,
-    get_session_manager,
+    get_session_user_id,
 )
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.security.session import SessionManager
 from app.models.api.cards import CardListResponse, EmailCard
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
 
 router = APIRouter(prefix="/cards", tags=["cards"])
-
-
-def get_session_user_id(
-    session_manager: SessionManager = Depends(get_session_manager),
-    session_cookie: str | None = Cookie(
-        default=None, alias=settings.session_cookie_name
-    ),
-) -> str | None:
-    if session_cookie is None:
-        return None
-    return session_manager.verify_session(session_cookie)
 
 
 @router.get("/", response_model=CardListResponse)
