@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient
 
@@ -148,10 +149,12 @@ app.mount(
 
 app.include_router(v1_router)
 
+_frontend_index = Path(__file__).parent / "static" / "index.html"
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+
+@app.get("/", include_in_schema=False)
+async def root() -> FileResponse:
+    return FileResponse(_frontend_index, media_type="text/html")
 
 
 @app.get("/health")
