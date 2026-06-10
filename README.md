@@ -87,7 +87,24 @@ pytest
 
 Unit tests run against an in-memory `DocumentDBManager` fake — no Mongo or network needed. Covered: queue claim/lease/requeue semantics, pipeline failure modes (summary/image/TTS), crypto envelope roundtrip, session signing, WAV packaging.
 
+## Mobile app (Android, `mobile/`)
+
+Expo (SDK 56) React Native app with a **home-screen widget**: the latest email's illustration under a frosted-glass panel; tapping it opens the app and plays the narration.
+
+```bash
+cd mobile
+npm install
+npx expo prebuild --platform android   # generates android/ (gitignored)
+npx expo run:android                   # build + install on device/emulator
+# or just the APK: cd android && ./gradlew assembleDebug
+```
+
+- Sign-in: the app opens the system browser at `/v1/auth/google/start?client=mobile`; the callback deep-links the session token back via `emailpartner://auth?token=…`, stored in SecureStore and sent as `Authorization: Bearer`.
+- Server URL is configurable on the sign-in screen — `http://10.0.2.2:8000` reaches your laptop from the emulator; use an ngrok HTTPS URL on a real phone.
+- The widget refreshes whenever the app fetches cards, plus Android's 30-minute background cycle. Add it from the launcher's widget picker ("EmailPartner").
+
 ## What's not here yet
 
 - Cloud blob storage (Local FS only; abstraction in place).
 - Push updates to the frontend (currently 4s polling; SSE would be the next step).
+- iOS app (the Expo code is portable, but the widget is Android-only and sign-in/scheme config would need an iOS pass).
