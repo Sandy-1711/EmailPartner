@@ -12,7 +12,13 @@ export interface EmailCard {
   processing_status: ProcessingStatus;
   background_image_url: string | null;
   text: string | null;
+  phrase: string | null;
+  tone: string | null;
   audio_url: string | null;
+}
+
+export interface CardDetail extends EmailCard {
+  body: string | null;
 }
 
 export interface CardListResponse {
@@ -60,6 +66,10 @@ export function getCards(limit = 50): Promise<CardListResponse> {
   return request<CardListResponse>(`/v1/cards/?limit=${limit}`);
 }
 
+export function getCard(cardId: string): Promise<CardDetail> {
+  return request<CardDetail>(`/v1/cards/${cardId}`);
+}
+
 export function retryCard(cardId: string): Promise<{ status: string }> {
   return request<{ status: string }>(`/v1/cards/${cardId}/retry`, { method: 'POST' });
 }
@@ -74,6 +84,11 @@ export async function getSignInUrl(): Promise<string> {
 export function headlineOf(card: EmailCard): string {
   const [headline] = (card.text ?? '').split('\n\n');
   return headline || card.subject || '(no subject)';
+}
+
+/** The big card line: the short exact phrase, falling back to the headline. */
+export function phraseOf(card: EmailCard): string {
+  return card.phrase || headlineOf(card);
 }
 
 export function summaryOf(card: EmailCard): string {
