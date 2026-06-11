@@ -64,6 +64,13 @@ export function FeedScreen({
       playerRef.current = player;
       setPlayingId(card.id);
       player.play();
+      // expo-audio reports no error status; if the stream never starts
+      // (bad URL, server down), don't leave the button stuck on "playing".
+      setTimeout(() => {
+        if (playerRef.current === player && !player.playing) {
+          stopAudio();
+        }
+      }, 5000);
     },
     [playingId, stopAudio]
   );
