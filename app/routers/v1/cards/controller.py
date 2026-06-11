@@ -10,11 +10,29 @@ from app.dependencies import (
     get_session_user_id,
 )
 from app.infrastructure.db.main import DBManager
-from app.models.api.cards import CardListResponse, EmailCard
+from app.models.api.cards import CardDetail, CardListResponse, EmailCard
+from app.models.db.emails import Emails
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
 
 router = APIRouter(prefix="/cards", tags=["cards"])
+
+
+def _to_card(email: Emails) -> EmailCard:
+    return EmailCard(
+        id=str(email.id),
+        gmail_message_id=email.gmail_message_id,
+        subject=email.subject,
+        from_email=email.from_email,
+        snippet=email.snippet,
+        received_at=email.received_at,
+        processing_status=email.processing_status,
+        background_image_url=email.card_background_url,
+        text=email.card_text,
+        phrase=email.card_phrase,
+        tone=email.card_tone,
+        audio_url=email.card_audio_url,
+    )
 
 
 @router.get("/", response_model=CardListResponse)
@@ -35,23 +53,28 @@ async def list_cards(
 
     store = EmailStore(db_manager)
     emails = await store.list_by_user(user_id=user_oid, limit=limit, offset=offset)
-    cards = [
-        EmailCard(
-            id=str(email.id),
-            gmail_message_id=email.gmail_message_id,
-            subject=email.subject,
-            from_email=email.from_email,
-            snippet=email.snippet,
-            received_at=email.received_at,
-            processing_status=email.processing_status,
-            background_image_url=email.card_background_url,
-            text=email.card_text,
-            audio_url=email.card_audio_url,
-        )
-        for email in emails
-    ]
+    cards = [_to_card(email) for email in emails]
     next_offset = offset + len(cards) if len(cards) == limit else None
     return CardListResponse(items=cards, limit=limit, offset=offset, next_offset=next_offset)
+
+
+@router.get("/{card_id}", response_model=CardDetail)
+async def get_card(
+    card_id: str,
+    db_manager: DBManager = Depends(get_db_manager),
+    session_user_id: str | None = Depends(get_session_user_id),
+) -> CardDetail:
+    if session_user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    try:
+        card_oid = ObjectId(card_id)
+    except InvalidId as exc:
+        raise HTTPException(status_code=400, detail="Invalid card_id") from exc
+
+    email = await EmailStore(db_manager).get_by_id(card_oid)
+    if email is None or str(email.user_id) != session_user_id:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return CardDetail(**_to_card(email).model_dump(), body=email.body)
 
 
 @router.post("/{card_id}/retry")

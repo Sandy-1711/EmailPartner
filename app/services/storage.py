@@ -129,6 +129,8 @@ class EmailStore:
         *,
         processing_status: EmailProcessingStatus | None = None,
         card_text: str | None = None,
+        card_phrase: str | None = None,
+        card_tone: str | None = None,
         card_background_url: str | None = None,
         card_audio_url: str | None = None,
         last_error: str | None = None,
@@ -138,6 +140,10 @@ class EmailStore:
             update["processing_status"] = processing_status.value
         if card_text is not None:
             update["card_text"] = card_text
+        if card_phrase is not None:
+            update["card_phrase"] = card_phrase
+        if card_tone is not None:
+            update["card_tone"] = card_tone
         if card_background_url is not None:
             update["card_background_url"] = card_background_url
         if card_audio_url is not None:

@@ -17,7 +17,13 @@ class EmailCard(BaseModel):
     processing_status: EmailProcessingStatus
     background_image_url: str | None
     text: str | None
+    phrase: str | None
+    tone: str | None
     audio_url: str | None
+
+
+class CardDetail(EmailCard):
+    body: str | None
 
 
 class CardListResponse(BaseModel):

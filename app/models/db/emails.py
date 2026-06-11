@@ -39,4 +39,6 @@ class Emails(ConfigModels.EmailPartnerDBConfig):
     last_error: str | None = None
     card_background_url: str | None = None
     card_text: str | None = None
+    card_phrase: str | None = None
+    card_tone: str | None = None
     card_audio_url: str | None = None

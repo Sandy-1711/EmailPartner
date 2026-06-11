@@ -79,6 +79,8 @@ class EmailPipeline:
             email_id,
             processing_status=EmailProcessingStatus.READY,
             card_text=card_text,
+            card_phrase=result.image_caption,
+            card_tone=result.tone,
             card_background_url=card_background_url,
             card_audio_url=card_audio_url,
         )

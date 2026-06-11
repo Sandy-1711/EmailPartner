@@ -53,6 +53,8 @@ async def test_process_success_produces_full_card(db_manager, app_settings):
     assert stored is not None
     assert stored.processing_status == EmailProcessingStatus.READY
     assert stored.card_text == "Acme accepted your offer\n\nThe contract is signed and starts Monday."
+    assert stored.card_phrase == "Acme said yes"
+    assert stored.card_tone == "informative"
     assert stored.card_background_url == f"mem://users/{email.user_id}/emails/{email.id}.png"
     assert stored.card_audio_url == f"mem://users/{email.user_id}/emails/{email.id}.wav"
     assert storage.blobs[f"users/{email.user_id}/emails/{email.id}.wav"][1] == "audio/wav"
