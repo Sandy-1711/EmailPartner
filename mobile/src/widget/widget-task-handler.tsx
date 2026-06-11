@@ -1,16 +1,16 @@
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
-import { EmailCard, getCards, headlineOf, senderOf } from '../lib/api';
+import { EmailCard, getCards, phraseOf, senderOf } from '../lib/api';
 import { getToken } from '../lib/config';
 import { CardWidget, WidgetCard } from './CardWidget';
 
 export function toWidgetCard(card: EmailCard): WidgetCard {
   return {
     id: card.id,
-    headline: headlineOf(card),
+    phrase: phraseOf(card),
     sender: senderOf(card),
-    imageUrl: card.background_image_url,
+    tone: card.tone,
     hasAudio: card.audio_url != null,
   };
 }
@@ -42,14 +42,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
       const { card, message } = await fetchWidgetCard();
-      props.renderWidget(
-        <CardWidget
-          card={card}
-          message={message}
-          width={props.widgetInfo.width}
-          height={props.widgetInfo.height}
-        />
-      );
+      props.renderWidget(<CardWidget card={card} message={message} />);
       break;
     }
     default:

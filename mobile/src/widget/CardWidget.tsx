@@ -1,127 +1,91 @@
 import React from 'react';
-import {
-  FlexWidget,
-  ImageWidget,
-  OverlapWidget,
-  TextWidget,
-} from 'react-native-android-widget';
+import { FlexWidget, TextWidget } from 'react-native-android-widget';
+
+import { paletteFor } from '../tones';
 
 export interface WidgetCard {
   id: string;
-  headline: string;
+  phrase: string;
   sender: string;
-  imageUrl: string | null;
+  tone: string | null;
   hasAudio: boolean;
 }
 
-interface Props {
-  card: WidgetCard | null;
-  message?: string;
-  width: number;
-  height: number;
-}
-
 /**
- * Home-screen widget: the latest email's illustration with a frosted glass
- * panel. Tapping it deep-links into the app (and auto-plays the narration).
+ * Home-screen widget: tone-tinted gradient, the email distilled to one
+ * phrase, and listen/read actions that deep-link into the app.
+ * (RemoteViews can't run sensors or animations — the gyro parallax version
+ * of this design lives in the in-app feed.)
  */
-export function CardWidget({ card, message, width, height }: Props) {
-  if (!card) {
-    return (
-      <FlexWidget
-        clickAction="OPEN_APP"
-        style={{
-          width: 'match_parent',
-          height: 'match_parent',
-          backgroundColor: '#141927',
-          borderRadius: 20,
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 16,
-        }}
-      >
-        <TextWidget
-          text="EmailPartner"
-          style={{ fontSize: 15, color: '#e9ecf2', fontWeight: 'bold' }}
-        />
-        <TextWidget
-          text={message ?? 'Open the app to get started'}
-          style={{ fontSize: 12, color: '#98a0b3', marginTop: 6 }}
-        />
-      </FlexWidget>
-    );
-  }
-
-  const playUri = `emailpartner://play/${card.id}`;
+export function CardWidget({ card, message }: { card: WidgetCard | null; message?: string }) {
+  const palette = paletteFor(card?.tone);
 
   return (
-    <OverlapWidget style={{ width: 'match_parent', height: 'match_parent' }}>
-      {card.imageUrl ? (
-        <ImageWidget
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: playUri }}
-          image={card.imageUrl as `https:${string}`}
-          imageWidth={width}
-          imageHeight={height}
-          radius={20}
-        />
-      ) : (
-        <FlexWidget
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: playUri }}
-          style={{
-            width: 'match_parent',
-            height: 'match_parent',
-            backgroundColor: '#1b2336',
-            borderRadius: 20,
-          }}
-        />
-      )}
-      <FlexWidget
+    <FlexWidget
+      clickAction="OPEN_APP"
+      style={{
+        width: 'match_parent',
+        height: 'match_parent',
+        borderRadius: 24,
+        backgroundGradient: {
+          from: palette.from,
+          to: palette.to,
+          orientation: 'TL_BR',
+        },
+        padding: 16,
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+      }}
+    >
+      <TextWidget
+        text={card ? card.sender.toUpperCase() : 'EMAILPARTNER'}
+        maxLines={1}
+        style={{ fontSize: 10, color: palette.dim, letterSpacing: 0.15 }}
+      />
+
+      <TextWidget
+        text={card ? card.phrase : message ?? 'Open the app to get started'}
+        maxLines={3}
         style={{
-          width: 'match_parent',
-          height: 'match_parent',
-          justifyContent: 'flex-end',
-          padding: 10,
+          fontSize: card ? 22 : 14,
+          color: '#ffffff',
+          fontWeight: 'bold',
+          marginTop: 8,
+          marginBottom: 10,
         }}
-      >
-        <FlexWidget
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: playUri }}
-          style={{
-            width: 'match_parent',
-            backgroundColor: '#ffffff2e',
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: '#ffffff55',
-            paddingHorizontal: 12,
-            paddingVertical: 9,
-          }}
-        >
-          <TextWidget
-            text={card.headline}
-            maxLines={2}
-            style={{ fontSize: 14, color: '#ffffff', fontWeight: 'bold' }}
-          />
+      />
+
+      {card ? (
+        <FlexWidget style={{ flexDirection: 'row' }}>
+          {card.hasAudio ? (
+            <FlexWidget
+              clickAction="OPEN_URI"
+              clickActionData={{ uri: `emailpartner://play/${card.id}` }}
+              style={{
+                backgroundColor: '#ffffff2b',
+                borderRadius: 18,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                marginRight: 8,
+              }}
+            >
+              <TextWidget text="▶  Listen" style={{ fontSize: 12, color: '#ffffff' }} />
+            </FlexWidget>
+          ) : null}
           <FlexWidget
+            clickAction="OPEN_URI"
+            clickActionData={{ uri: `emailpartner://read/${card.id}` }}
             style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              width: 'match_parent',
-              marginTop: 4,
+              backgroundColor: '#ffffff2b',
+              borderRadius: 18,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
             }}
           >
-            <TextWidget
-              text={card.sender}
-              maxLines={1}
-              style={{ fontSize: 11, color: '#e9ecf2' }}
-            />
-            {card.hasAudio ? (
-              <TextWidget text="▶ listen" style={{ fontSize: 11, color: '#ffffff' }} />
-            ) : null}
+            <TextWidget text="👁  Read" style={{ fontSize: 12, color: '#ffffff' }} />
           </FlexWidget>
         </FlexWidget>
-      </FlexWidget>
-    </OverlapWidget>
+      ) : null}
+    </FlexWidget>
   );
 }

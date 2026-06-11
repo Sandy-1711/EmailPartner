@@ -10,12 +10,10 @@ export function refreshWidget(cards: EmailCard[]): void {
   const card = latestReadyCard(cards);
   requestWidgetUpdate({
     widgetName: 'EmailCard',
-    renderWidget: (widgetInfo) =>
+    renderWidget: () =>
       React.createElement(CardWidget, {
         card,
         message: card ? undefined : 'No cards yet — send yourself an email',
-        width: widgetInfo.width,
-        height: widgetInfo.height,
       }),
     widgetNotFound: () => {},
   }).catch(() => {});
