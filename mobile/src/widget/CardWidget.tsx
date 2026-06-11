@@ -32,7 +32,8 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
           to: palette.to,
           orientation: 'TL_BR',
         },
-        padding: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
         justifyContent: 'space-between',
         alignItems: 'flex-start',
       }}
@@ -40,18 +41,18 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
       <TextWidget
         text={card ? card.sender.toUpperCase() : 'EMAILPARTNER'}
         maxLines={1}
-        style={{ fontSize: 10, color: palette.dim, letterSpacing: 0.15 }}
+        style={{ fontSize: 9, color: palette.dim, letterSpacing: 0.15 }}
       />
 
       <TextWidget
         text={card ? card.phrase : message ?? 'Open the app to get started'}
-        maxLines={3}
+        maxLines={2}
         style={{
-          fontSize: card ? 22 : 14,
+          fontSize: card ? 17 : 13,
           color: '#ffffff',
           fontWeight: 'bold',
-          marginTop: 8,
-          marginBottom: 10,
+          marginTop: 4,
+          marginBottom: 6,
         }}
       />
 
@@ -63,13 +64,13 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
               clickActionData={{ uri: `emailpartner://play/${card.id}` }}
               style={{
                 backgroundColor: '#ffffff2b',
-                borderRadius: 18,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                marginRight: 8,
+                borderRadius: 14,
+                paddingHorizontal: 11,
+                paddingVertical: 5,
+                marginRight: 6,
               }}
             >
-              <TextWidget text="▶  Listen" style={{ fontSize: 12, color: '#ffffff' }} />
+              <TextWidget text="▶  Listen" style={{ fontSize: 11, color: '#ffffff' }} />
             </FlexWidget>
           ) : null}
           <FlexWidget
@@ -77,12 +78,12 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
             clickActionData={{ uri: `emailpartner://read/${card.id}` }}
             style={{
               backgroundColor: '#ffffff2b',
-              borderRadius: 18,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
+              borderRadius: 14,
+              paddingHorizontal: 11,
+              paddingVertical: 5,
             }}
           >
-            <TextWidget text="👁  Read" style={{ fontSize: 12, color: '#ffffff' }} />
+            <TextWidget text="👁  Read" style={{ fontSize: 11, color: '#ffffff' }} />
           </FlexWidget>
         </FlexWidget>
       ) : null}
