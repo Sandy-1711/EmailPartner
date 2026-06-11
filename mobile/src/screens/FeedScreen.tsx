@@ -103,10 +103,14 @@ export function FeedScreen({
   }, [refresh, onSignOut]);
 
   // Widget "listen" tap: play that card's narration once cards are loaded.
+  // Guarded by a ref: playingId changes recreate togglePlay, and without the
+  // guard the effect re-fires and toggles playback straight back off.
+  const handledPlayRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!playCardId) return;
+    if (!playCardId || handledPlayRef.current === playCardId) return;
     const card = cards.find((c) => c.id === playCardId);
     if (card?.audio_url) {
+      handledPlayRef.current = playCardId;
       togglePlay(card);
       onPlayedRequestedCard();
     }
