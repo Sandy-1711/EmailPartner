@@ -13,6 +13,7 @@ type AuthState = 'loading' | 'signedOut' | 'signedIn';
 export default function App() {
   const [auth, setAuth] = useState<AuthState>('loading');
   const [playCardId, setPlayCardId] = useState<string | null>(null);
+  const [readCardId, setReadCardId] = useState<string | null>(null);
   const url = Linking.useURL();
 
   useEffect(() => {
@@ -30,6 +31,9 @@ export default function App() {
     } else if (hostname === 'play') {
       const cardId = (path ?? '').replace(/^\//, '');
       if (cardId) setPlayCardId(cardId);
+    } else if (hostname === 'read') {
+      const cardId = (path ?? '').replace(/^\//, '');
+      if (cardId) setReadCardId(cardId);
     }
   }, [url]);
 
@@ -55,6 +59,8 @@ export default function App() {
           onSignOut={onSignOut}
           playCardId={playCardId}
           onPlayedRequestedCard={() => setPlayCardId(null)}
+          readCardId={readCardId}
+          onReadHandled={() => setReadCardId(null)}
         />
       )}
     </View>

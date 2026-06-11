@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native';
 
-import { GlassCard } from '../components/GlassCard';
+import { EmailModal } from '../components/EmailModal';
+import { ToneCard } from '../components/ToneCard';
+import { useTilt } from '../hooks/useTilt';
 import { ApiError, EmailCard, getCards, getMe, Me, retryCard } from '../lib/api';
 import { colors } from '../theme';
 import { refreshWidget } from '../widget/refresh-widget';
@@ -20,14 +22,24 @@ interface Props {
   onSignOut: () => void;
   playCardId: string | null;
   onPlayedRequestedCard: () => void;
+  readCardId: string | null;
+  onReadHandled: () => void;
 }
 
-export function FeedScreen({ onSignOut, playCardId, onPlayedRequestedCard }: Props) {
+export function FeedScreen({
+  onSignOut,
+  playCardId,
+  onPlayedRequestedCard,
+  readCardId,
+  onReadHandled,
+}: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [cards, setCards] = useState<EmailCard[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
+  const tilt = useTilt();
 
   const stopAudio = useCallback(() => {
     playerRef.current?.remove();
@@ -83,7 +95,7 @@ export function FeedScreen({ onSignOut, playCardId, onPlayedRequestedCard }: Pro
     };
   }, [refresh, onSignOut]);
 
-  // Deep link from the widget: play a specific card's narration on open.
+  // Widget "listen" tap: play that card's narration once cards are loaded.
   useEffect(() => {
     if (!playCardId) return;
     const card = cards.find((c) => c.id === playCardId);
@@ -92,6 +104,14 @@ export function FeedScreen({ onSignOut, playCardId, onPlayedRequestedCard }: Pro
       onPlayedRequestedCard();
     }
   }, [playCardId, cards, togglePlay, onPlayedRequestedCard]);
+
+  // Widget "read" tap: open the full email sheet.
+  useEffect(() => {
+    if (readCardId) {
+      setOpenCardId(readCardId);
+      onReadHandled();
+    }
+  }, [readCardId, onReadHandled]);
 
   async function onRefreshPull() {
     setRefreshing(true);
@@ -114,7 +134,7 @@ export function FeedScreen({ onSignOut, playCardId, onPlayedRequestedCard }: Pro
         <View>
           <Text style={styles.brand}>EmailPartner</Text>
           <Text style={styles.tagline}>
-            {me ? me.display_name || me.email : 'your inbox, illustrated'}
+            {me ? me.display_name || me.email : 'your inbox, distilled'}
           </Text>
         </View>
         <Pressable onPress={onSignOut} style={styles.signOut}>
@@ -131,21 +151,25 @@ export function FeedScreen({ onSignOut, playCardId, onPlayedRequestedCard }: Pro
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyBig}>🎨</Text>
+            <Text style={styles.emptyBig}>✉️</Text>
             <Text style={styles.emptyText}>
-              No cards yet. Send yourself an email and watch it become art.
+              No cards yet. Send yourself an email and watch it appear.
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <GlassCard
+          <ToneCard
             card={item}
+            tilt={tilt}
             playing={playingId === item.id}
             onTogglePlay={togglePlay}
+            onRead={(card) => setOpenCardId(card.id)}
             onRetry={onRetry}
           />
         )}
       />
+
+      <EmailModal cardId={openCardId} onClose={() => setOpenCardId(null)} />
     </View>
   );
 }
@@ -159,8 +183,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 58,
     paddingBottom: 14,
-    borderBottomColor: colors.panelBorder,
-    borderBottomWidth: 1,
   },
   brand: { color: colors.text, fontWeight: '800', fontSize: 18 },
   tagline: { color: colors.textDim, fontSize: 12, marginTop: 2 },
