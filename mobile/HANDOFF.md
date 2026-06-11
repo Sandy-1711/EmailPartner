@@ -52,7 +52,9 @@ State as of 2026-06-10 (evening). Backend is **feature-complete and tested**; th
    - Gmail OAuth refresh tokens expire after 7 days while the Google OAuth consent screen is in Testing mode — re-sign-in, or publish the app in Google Cloud console.
    - The user's existing Gmail account row had a dead refresh token (invalid_grant in renewal loop) — re-sign-in fixes; optional hardening: mark account on invalid_grant instead of hourly retry-spam (discussed, not built).
 
-5. **Nice-to-haves discussed, not started:** GCS blob storage, SSE instead of polling (web), narration playback directly from widget without opening the app (needs foreground service), invalid_grant hardening in the watch renewal loop. (README mobile section: done.)
+5. **Planned enhancement — local model support:** user wants to run summarization/TTS against local models eventually. The seam already exists: `LLMProvider` ABC (`app/infrastructure/llm/providers/base.py`) + `build_llm_provider(provider=...)` factory. Plan: add an OpenAI-compatible provider (works with Ollama/LM Studio/llama.cpp servers) selected via `LLM_PROVIDER` + `LLM_BASE_URL` env vars; structured output via JSON mode + pydantic validation; TTS stays on Gemini (or goes optional) since local TTS is a separate problem.
+
+6. **Nice-to-haves discussed, not started:** GCS blob storage, SSE instead of polling (web), narration playback directly from widget without opening the app (needs foreground service), invalid_grant hardening in the watch renewal loop. (README mobile section: done.)
 
 ## Conventions
 - Granular conventional commits (`feat(mobile): …`), NO Co-Authored-By trailer.
