@@ -75,13 +75,19 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_CLICK': {
       if (props.clickAction === 'PLAY_NARRATION' && props.clickActionData) {
         // synchronously, before any await: stay inside the FGS allowance window
-        toggleNarration(props.clickActionData);
-        console.log('[widget] click handled, currentId =', Narration.currentId());
-        const { card, message } = await fetchWidgetCard();
-        props.renderWidget(
-          <CardWidget card={card} message={message} playingId={Narration.currentId()} />
-        );
-        console.log('[widget] re-rendered, card =', card?.id);
+        const data = props.clickActionData;
+        toggleNarration(data);
+        // re-render instantly from the click payload — a network fetch here
+        // made the icon lag the audio by seconds
+        const card: WidgetCard = {
+          id: String(data.id ?? ''),
+          phrase: typeof data.phrase === 'string' ? data.phrase : 'Email summary',
+          sender: typeof data.sender === 'string' ? data.sender : '',
+          tone: typeof data.tone === 'string' ? data.tone : null,
+          hasAudio: true,
+          audioUrl: typeof data.audioUrl === 'string' ? data.audioUrl : null,
+        };
+        props.renderWidget(<CardWidget card={card} playingId={Narration.currentId()} />);
       }
       break;
     }
