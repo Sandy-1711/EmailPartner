@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -9,84 +8,218 @@ import {
   View,
 } from 'react-native';
 
-import { CardDetail, getCard, senderOf } from '../lib/api';
+import type { Tilt } from '../hooks/useTilt';
+import type { Playback } from '../hooks/usePlayback';
+import { CardDetail, EmailCard, getCard, phraseOf, senderOf, summaryOf } from '../lib/api';
+import { fonts } from '../theme';
 import { paletteFor } from '../tones';
-import { colors } from '../theme';
+import { MeshGradient } from './MeshGradient';
+import { ToneDot } from './ToneCard';
+import { WavePlayer } from './WavePlayer';
 
 interface Props {
-  cardId: string | null;
+  card: EmailCard | null;
+  tilt: Tilt;
+  playback: Playback;
   onClose: () => void;
 }
 
-export function EmailModal({ cardId, onClose }: Props) {
+function timeOf(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const sameDay = new Date().toDateString() === d.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export function EmailDetail({ card, tilt, playback, onClose }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
+  const [showFull, setShowFull] = useState(false);
 
   useEffect(() => {
     setDetail(null);
-    if (cardId) {
-      getCard(cardId).then(setDetail).catch(() => {});
+    setShowFull(false);
+    if (card) {
+      getCard(card.id).then(setDetail).catch(() => {});
     }
-  }, [cardId]);
+  }, [card]);
 
-  const palette = paletteFor(detail?.tone);
+  if (!card) {
+    return <Modal visible={false} transparent />;
+  }
+
+  const palette = paletteFor(card.tone);
+  const playing = playback.playingId === card.id;
 
   return (
-    <Modal visible={cardId !== null} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={[styles.accent, { backgroundColor: palette.from }]} />
-          <View style={styles.header}>
-            <Text style={styles.subject} numberOfLines={2}>
-              {detail?.subject ?? ' '}
-            </Text>
-            <Pressable onPress={onClose} style={styles.close}>
-              <Text style={styles.closeText}>✕</Text>
-            </Pressable>
-          </View>
-          {detail ? (
-            <>
-              <Text style={[styles.from, { color: palette.dim }]}>{senderOf(detail)}</Text>
-              <ScrollView style={styles.bodyScroll} contentContainerStyle={{ paddingBottom: 30 }}>
-                <Text style={styles.body}>{detail.body || detail.snippet || '(no content)'}</Text>
-              </ScrollView>
-            </>
-          ) : (
-            <View style={styles.loading}>
-              <ActivityIndicator color={palette.from} />
-            </View>
-          )}
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={styles.root}>
+        <MeshGradient palette={palette} tilt={tilt} veil="ambient" drift={160} />
+
+        <View style={styles.topBar}>
+          <Pressable onPress={onClose} style={styles.circleButton}>
+            <Text style={styles.circleGlyph}>‹</Text>
+          </Pressable>
+          <Text style={[styles.timeTop, { color: 'rgba(255,255,255,0.5)' }]}>
+            {timeOf(card.received_at)}
+          </Text>
         </View>
+
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollInner}>
+          <View style={styles.toneRow}>
+            <ToneDot color={palette.dot} />
+            <Text style={styles.toneLabel}>{palette.label.toUpperCase()}</Text>
+          </View>
+
+          <Text style={styles.phrase}>{phraseOf(card)}</Text>
+
+          <View style={styles.senderRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{senderOf(card)[0]?.toUpperCase() ?? '?'}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.senderName}>{senderOf(card)}</Text>
+              <Text style={styles.subject} numberOfLines={1}>
+                {card.subject ?? ''}
+              </Text>
+            </View>
+          </View>
+
+          {card.audio_url ? (
+            <View style={styles.playerCard}>
+              <View style={styles.playerHeader}>
+                <Text style={[styles.playerLabel, { color: palette.accent }]}>AUDIO SUMMARY</Text>
+                <Text style={styles.playerSpeed}>1.0×</Text>
+              </View>
+              <WavePlayer
+                emailId={card.id}
+                palette={palette}
+                playing={playing}
+                progress={playing ? playback.progress : 0}
+                duration={playing ? playback.duration : 0}
+                onToggle={() => playback.toggle(card)}
+                size="hero"
+              />
+            </View>
+          ) : null}
+
+          <Text style={styles.sectionLabel}>THE GIST</Text>
+          <Text style={styles.gist}>{summaryOf(card)}</Text>
+
+          <Pressable onPress={() => setShowFull((s) => !s)} style={styles.fullToggle}>
+            <Text style={styles.fullToggleText}>Read full email</Text>
+            <Text style={[styles.chevron, showFull && { transform: [{ rotate: '180deg' }] }]}>⌄</Text>
+          </Pressable>
+          {showFull && (
+            <Text style={styles.fullBody}>
+              {detail ? detail.body || detail.snippet || '(no content)' : 'Loading…'}
+            </Text>
+          )}
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: '#101218',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '85%',
-    minHeight: '50%',
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    overflow: 'hidden',
+  root: { flex: 1, backgroundColor: '#070510' },
+  topBar: {
+    paddingTop: 54,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  accent: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, marginBottom: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  subject: { color: colors.text, fontSize: 20, fontWeight: '800', flex: 1, marginRight: 12 },
-  close: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  circleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeText: { color: colors.text, fontSize: 14 },
-  from: { fontSize: 13, fontWeight: '600', marginTop: 6, marginBottom: 16 },
-  bodyScroll: { flexGrow: 0 },
-  body: { color: colors.textDim, fontSize: 15, lineHeight: 23 },
-  loading: { paddingVertical: 60 },
+  circleGlyph: { color: '#fff', fontSize: 24, lineHeight: 26, marginTop: -2 },
+  timeTop: { fontFamily: fonts.medium, fontSize: 13 },
+  scroll: { flex: 1 },
+  scrollInner: { paddingHorizontal: 24 },
+  toneRow: { marginTop: 24, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  toneLabel: {
+    color: 'rgba(255,255,255,0.92)',
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    letterSpacing: 0.7,
+  },
+  phrase: {
+    marginTop: 14,
+    color: '#fff',
+    fontFamily: fonts.semibold,
+    fontSize: 40,
+    lineHeight: 41,
+    letterSpacing: -1.1,
+  },
+  senderRow: { marginTop: 18, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: { color: '#fff', fontFamily: fonts.semibold, fontSize: 15 },
+  senderName: { color: '#fff', fontFamily: fonts.semibold, fontSize: 15 },
+  subject: { color: 'rgba(255,255,255,0.55)', fontFamily: fonts.medium, fontSize: 13, marginTop: 1 },
+  playerCard: {
+    marginTop: 24,
+    padding: 22,
+    paddingBottom: 20,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0,0,0,0.34)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  playerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  playerLabel: { fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 0.7 },
+  playerSpeed: { color: 'rgba(255,255,255,0.5)', fontFamily: fonts.medium, fontSize: 12 },
+  sectionLabel: {
+    marginTop: 22,
+    marginBottom: 10,
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+  },
+  gist: {
+    color: 'rgba(255,255,255,0.92)',
+    fontFamily: fonts.regular,
+    fontSize: 19,
+    lineHeight: 28,
+    letterSpacing: -0.2,
+  },
+  fullToggle: {
+    marginTop: 22,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  fullToggleText: { color: '#fff', fontFamily: fonts.semibold, fontSize: 14 },
+  chevron: { color: '#fff', fontSize: 16 },
+  fullBody: {
+    color: 'rgba(255,255,255,0.74)',
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    lineHeight: 26,
+  },
 });

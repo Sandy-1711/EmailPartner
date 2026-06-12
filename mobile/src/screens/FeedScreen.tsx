@@ -1,4 +1,3 @@
-import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
@@ -9,11 +8,14 @@ import {
   View,
 } from 'react-native';
 
-import { EmailModal } from '../components/EmailModal';
-import { ToneCard } from '../components/ToneCard';
+import { EmailDetail } from '../components/EmailModal';
+import { MeshGradient } from '../components/MeshGradient';
+import { EchoCard } from '../components/ToneCard';
+import { usePlayback } from '../hooks/usePlayback';
 import { useTilt } from '../hooks/useTilt';
 import { ApiError, EmailCard, getCards, getMe, Me, retryCard } from '../lib/api';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
+import { TONES } from '../tones';
 import { refreshWidget } from '../widget/refresh-widget';
 
 const POLL_MS = 4000;
@@ -36,44 +38,9 @@ export function FeedScreen({
   const [me, setMe] = useState<Me | null>(null);
   const [cards, setCards] = useState<EmailCard[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
-  const playerRef = useRef<AudioPlayer | null>(null);
+  const [openCard, setOpenCard] = useState<EmailCard | null>(null);
   const tilt = useTilt();
-
-  const stopAudio = useCallback(() => {
-    playerRef.current?.remove();
-    playerRef.current = null;
-    setPlayingId(null);
-  }, []);
-
-  const togglePlay = useCallback(
-    (card: EmailCard) => {
-      if (!card.audio_url) return;
-      if (playingId === card.id) {
-        stopAudio();
-        return;
-      }
-      playerRef.current?.remove();
-      const player = createAudioPlayer({ uri: card.audio_url });
-      player.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) {
-          stopAudio();
-        }
-      });
-      playerRef.current = player;
-      setPlayingId(card.id);
-      player.play();
-      // expo-audio reports no error status; if the stream never starts
-      // (bad URL, server down), don't leave the button stuck on "playing".
-      setTimeout(() => {
-        if (playerRef.current === player && !player.playing) {
-          stopAudio();
-        }
-      }, 5000);
-    },
-    [playingId, stopAudio]
-  );
+  const playback = usePlayback();
 
   const refresh = useCallback(async () => {
     try {
@@ -88,7 +55,6 @@ export function FeedScreen({
   }, [onSignOut]);
 
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
     getMe()
       .then(setMe)
       .catch((e) => {
@@ -96,33 +62,32 @@ export function FeedScreen({
       });
     refresh();
     const interval = setInterval(refresh, POLL_MS);
-    return () => {
-      clearInterval(interval);
-      playerRef.current?.remove();
-    };
+    return () => clearInterval(interval);
   }, [refresh, onSignOut]);
 
   // Widget "listen" tap: play that card's narration once cards are loaded.
-  // Guarded by a ref: playingId changes recreate togglePlay, and without the
-  // guard the effect re-fires and toggles playback straight back off.
+  // Ref guard: playingId changes recreate toggle; without it the effect
+  // re-fires and toggles playback straight back off.
   const handledPlayRef = useRef<string | null>(null);
   useEffect(() => {
     if (!playCardId || handledPlayRef.current === playCardId) return;
     const card = cards.find((c) => c.id === playCardId);
     if (card?.audio_url) {
       handledPlayRef.current = playCardId;
-      togglePlay(card);
+      playback.toggle(card);
       onPlayedRequestedCard();
     }
-  }, [playCardId, cards, togglePlay, onPlayedRequestedCard]);
+  }, [playCardId, cards, playback, onPlayedRequestedCard]);
 
-  // Widget "read" tap: open the full email sheet.
+  // Widget "read" tap: open the detail screen.
   useEffect(() => {
-    if (readCardId) {
-      setOpenCardId(readCardId);
+    if (!readCardId) return;
+    const card = cards.find((c) => c.id === readCardId);
+    if (card) {
+      setOpenCard(card);
       onReadHandled();
     }
-  }, [readCardId, onReadHandled]);
+  }, [readCardId, cards, onReadHandled]);
 
   async function onRefreshPull() {
     setRefreshing(true);
@@ -141,16 +106,22 @@ export function FeedScreen({
 
   return (
     <View style={styles.container}>
+      {/* faint ambient mesh behind the whole inbox, like the design */}
+      <View style={StyleSheet.absoluteFill}>
+        <MeshGradient palette={TONES.informative} veil="ambient" drift={200} />
+      </View>
+
       <View style={styles.header}>
         <View>
-          <Text style={styles.brand}>EmailPartner</Text>
-          <Text style={styles.tagline}>
-            {me ? me.display_name || me.email : 'your inbox, distilled'}
-          </Text>
+          <Text style={styles.kicker}>{me ? me.display_name || me.email : 'ECHO MAIL'}</Text>
+          <Text style={styles.title}>Inbox</Text>
         </View>
-        <Pressable onPress={onSignOut} style={styles.signOut}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Text style={styles.count}>{cards.length} summaries</Text>
+          <Pressable onPress={onSignOut} hitSlop={8}>
+            <Text style={styles.signOut}>Sign out</Text>
+          </Pressable>
+        </View>
       </View>
 
       <FlatList
@@ -158,29 +129,34 @@ export function FeedScreen({
         keyExtractor={(card) => card.id}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefreshPull} tintColor={colors.text} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefreshPull} tintColor="#fff" />
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyBig}>✉️</Text>
+            <Text style={styles.emptyTitle}>Nothing yet</Text>
             <Text style={styles.emptyText}>
-              No cards yet. Send yourself an email and watch it appear.
+              Send yourself an email and watch it become a summary you can hear.
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <ToneCard
+          <EchoCard
             card={item}
             tilt={tilt}
-            playing={playingId === item.id}
-            onTogglePlay={togglePlay}
-            onRead={(card) => setOpenCardId(card.id)}
+            playing={playback.playingId === item.id}
+            onTogglePlay={playback.toggle}
+            onOpen={setOpenCard}
             onRetry={onRetry}
           />
         )}
       />
 
-      <EmailModal cardId={openCardId} onClose={() => setOpenCardId(null)} />
+      <EmailDetail
+        card={openCard}
+        tilt={tilt}
+        playback={playback}
+        onClose={() => setOpenCard(null)}
+      />
     </View>
   );
 }
@@ -188,25 +164,32 @@ export function FeedScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
     paddingTop: 58,
-    paddingBottom: 14,
+    paddingHorizontal: 22,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
-  brand: { color: colors.text, fontWeight: '800', fontSize: 18 },
-  tagline: { color: colors.textDim, fontSize: 12, marginTop: 2 },
-  signOut: {
-    borderColor: colors.panelBorder,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+  kicker: {
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    marginBottom: 8,
   },
-  signOutText: { color: colors.textDim, fontSize: 12 },
-  list: { padding: 18, paddingBottom: 60 },
-  empty: { alignItems: 'center', paddingTop: 120, paddingHorizontal: 30 },
-  emptyBig: { fontSize: 40, marginBottom: 12 },
-  emptyText: { color: colors.textDim, textAlign: 'center', fontSize: 14, lineHeight: 21 },
+  title: { color: '#fff', fontFamily: fonts.semibold, fontSize: 30, letterSpacing: -0.6 },
+  headerRight: { alignItems: 'flex-end', gap: 6, paddingBottom: 4 },
+  count: { color: 'rgba(255,255,255,0.5)', fontFamily: fonts.medium, fontSize: 13 },
+  signOut: { color: 'rgba(255,255,255,0.35)', fontFamily: fonts.semibold, fontSize: 12 },
+  list: { paddingHorizontal: 14, paddingBottom: 28 },
+  empty: { alignItems: 'center', paddingTop: 110, paddingHorizontal: 36 },
+  emptyTitle: { color: '#fff', fontFamily: fonts.semibold, fontSize: 22, marginBottom: 10 },
+  emptyText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
 });

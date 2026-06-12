@@ -1,3 +1,10 @@
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+  useFonts,
+} from '@expo-google-fonts/space-grotesk';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -15,6 +22,12 @@ export default function App() {
   const [playCardId, setPlayCardId] = useState<string | null>(null);
   const [readCardId, setReadCardId] = useState<string | null>(null);
   const url = Linking.useURL();
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
 
   useEffect(() => {
     getToken().then((token) => setAuth(token ? 'signedIn' : 'signedOut'));
@@ -48,7 +61,7 @@ export default function App() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="light" />
-      {auth === 'loading' ? (
+      {auth === 'loading' || !fontsLoaded ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <ActivityIndicator color={colors.accent} />
         </View>
