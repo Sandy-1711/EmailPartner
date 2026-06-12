@@ -108,6 +108,22 @@ export function TweaksSheet({ visible, onClose }: Props) {
               />
             ))}
           </Row>
+
+          <Row label="Blobs">
+            {[2, 3, 4].map((n) => (
+              <Chip
+                key={n}
+                label={String(n)}
+                active={tweaks.blobs === n}
+                onPress={() => setTweak('blobs', n)}
+              />
+            ))}
+          </Row>
+
+          <Row label="Grain">
+            <Chip label="On" active={tweaks.grain} onPress={() => setTweak('grain', true)} />
+            <Chip label="Off" active={!tweaks.grain} onPress={() => setTweak('grain', false)} />
+          </Row>
         </Pressable>
       </Pressable>
     </Modal>

@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
 import type { Tilt } from '../hooks/useTilt';
@@ -18,7 +18,6 @@ interface BlobSpec {
   top: string;
   left: string;
   w: string;
-  h: string;
   dur: number;
   delay: number;
   // drift end-state from the meshA–D keyframes, as fractions of card size
@@ -28,11 +27,13 @@ interface BlobSpec {
   s1: number;
 }
 
+// Blobs are sized off the container WIDTH with aspectRatio 1 so they stay
+// circular on wide cards (height-percent sizing flattened them into bands).
 const BLOBS: BlobSpec[] = [
-  { top: '-10%', left: '-8%', w: '78%', h: '82%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
-  { top: '8%', left: '38%', w: '74%', h: '78%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
-  { top: '34%', left: '-12%', w: '82%', h: '80%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
-  { top: '30%', left: '40%', w: '88%', h: '86%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
+  { top: '-30%', left: '-12%', w: '62%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
+  { top: '-18%', left: '52%', w: '58%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
+  { top: '38%', left: '-8%', w: '60%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
+  { top: '34%', left: '56%', w: '66%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
 ];
 
 function Blob({
@@ -86,7 +87,7 @@ function Blob({
         top: spec.top as `${number}%`,
         left: spec.left as `${number}%`,
         width: spec.w as `${number}%`,
-        height: spec.h as `${number}%`,
+        aspectRatio: 1,
         transform: [{ translateX }, { translateY }, { scale }],
       }}
     >
@@ -117,10 +118,23 @@ interface Props {
   veil?: 'card' | 'ambient' | 'none';
   /** motion speed multiplier; 0 = static */
   speed?: number;
+  /** film-grain overlay */
+  grain?: boolean;
+  /** how many blobs to draw (2–4) */
+  blobCount?: number;
   style?: object;
 }
 
-export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', speed = 1, style }: Props) {
+export function MeshGradient({
+  palette,
+  tilt,
+  drift = 110,
+  veil = 'card',
+  speed = 1,
+  grain = true,
+  blobCount = 4,
+  style,
+}: Props) {
   const parallax = tilt
     ? [
         {
@@ -135,7 +149,7 @@ export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', speed 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, overflow: 'hidden' }, style]}>
       <Animated.View style={[styles.field, { transform: parallax }]}>
-        {BLOBS.map((spec, i) => (
+        {BLOBS.slice(0, Math.max(2, Math.min(4, blobCount))).map((spec, i) => (
           <Blob
             key={i}
             color={palette.blobs[i % palette.blobs.length]}
@@ -145,6 +159,13 @@ export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', speed 
           />
         ))}
       </Animated.View>
+      {grain && (
+        <Image
+          source={require('../../assets/mesh/noise.png')}
+          resizeMode="repeat"
+          style={[StyleSheet.absoluteFill, { width: undefined, height: undefined, opacity: 0.55 }]}
+        />
+      )}
       {veil !== 'none' && (
         <LinearGradient
           colors={

@@ -44,7 +44,7 @@ export function FeedScreen({
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const tilt = useTilt();
   const playback = usePlayback();
-  const { palette: paletteOf, speed } = useTweaks();
+  const { palette: paletteOf, speed, tweaks } = useTweaks();
 
   const refresh = useCallback(async () => {
     try {
@@ -112,7 +112,14 @@ export function FeedScreen({
     <View style={styles.container}>
       {/* faint ambient mesh behind the whole inbox, like the design */}
       <View style={StyleSheet.absoluteFill}>
-        <MeshGradient palette={paletteOf('informative')} veil="ambient" drift={200} speed={speed} />
+        <MeshGradient
+          palette={paletteOf('informative')}
+          veil="ambient"
+          drift={200}
+          speed={speed}
+          grain={tweaks.grain}
+          blobCount={tweaks.blobs}
+        />
       </View>
 
       <View style={styles.header}>

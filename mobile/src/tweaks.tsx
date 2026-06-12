@@ -17,9 +17,18 @@ export interface Tweaks {
   hue: number;
   fontScale: number;
   density: Density;
+  grain: boolean;
+  blobs: number;
 }
 
-export const DEFAULT_TWEAKS: Tweaks = { motion: 'normal', hue: 0, fontScale: 1, density: 'cozy' };
+export const DEFAULT_TWEAKS: Tweaks = {
+  motion: 'normal',
+  hue: 0,
+  fontScale: 1,
+  density: 'cozy',
+  grain: true,
+  blobs: 4,
+};
 
 export const MOTION_SPEED: Record<Motion, number> = {
   off: 0,

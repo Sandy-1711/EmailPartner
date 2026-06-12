@@ -53,8 +53,18 @@ export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }:
   const compact = tweaks.density === 'compact';
 
   return (
-    <Pressable onPress={() => !busy && onOpen(card)} style={styles.card}>
-      <MeshGradient palette={palette} tilt={tilt} veil="card" speed={speed} />
+    <Pressable
+      onPress={() => !busy && onOpen(card)}
+      style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.985 }] }]}
+    >
+      <MeshGradient
+        palette={palette}
+        tilt={tilt}
+        veil="card"
+        speed={speed}
+        grain={tweaks.grain}
+        blobCount={tweaks.blobs}
+      />
 
       <View style={[styles.content, compact && { paddingVertical: 12 }]}>
         <View style={styles.headerRow}>

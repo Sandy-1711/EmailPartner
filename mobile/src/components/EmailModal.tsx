@@ -60,7 +60,15 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
-        <MeshGradient palette={palette} tilt={tilt} veil="ambient" drift={160} speed={speed} />
+        <MeshGradient
+          palette={palette}
+          tilt={tilt}
+          veil="ambient"
+          drift={160}
+          speed={speed}
+          grain={tweaks.grain}
+          blobCount={tweaks.blobs}
+        />
 
         <View style={styles.topBar}>
           <Pressable onPress={onClose} style={styles.circleButton}>
