@@ -10,6 +10,7 @@ export interface WidgetCard {
   sender: string;
   tone: string | null;
   hasAudio: boolean;
+  audioUrl: string | null;
 }
 
 /**
@@ -22,9 +23,18 @@ export interface WidgetCard {
  * bitmap at the bottom/right — so everything sits inside a transparent
  * safety inset and the visible card keeps its corners even when clipped.
  */
-export function CardWidget({ card, message }: { card: WidgetCard | null; message?: string }) {
+export function CardWidget({
+  card,
+  message,
+  playingId,
+}: {
+  card: WidgetCard | null;
+  message?: string;
+  playingId?: string | null;
+}) {
   const palette = paletteFor(card?.tone);
   const wave = card ? makeWave(card.id, 18) : [];
+  const playing = card != null && playingId === card.id;
 
   return (
     <FlexWidget
@@ -97,8 +107,14 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
 
         {card && card.hasAudio ? (
           <FlexWidget
-            clickAction="OPEN_URI"
-            clickActionData={{ uri: `emailpartner://play/${card.id}` }}
+            // Plays in the app process headlessly — no need to open the app.
+            clickAction="PLAY_NARRATION"
+            clickActionData={{
+              id: card.id,
+              audioUrl: card.audioUrl,
+              phrase: card.phrase,
+              sender: card.sender,
+            }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -117,7 +133,7 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
                 marginRight: 9,
               }}
             >
-              <TextWidget text="▶" style={{ fontSize: 11, color: '#0a0612' }} />
+              <TextWidget text={playing ? '⏸' : '▶'} style={{ fontSize: 11, color: '#0a0612' }} />
             </FlexWidget>
             <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               {wave.map((v, i) => (
@@ -127,7 +143,7 @@ export function CardWidget({ card, message }: { card: WidgetCard | null; message
                     width: 3,
                     height: Math.round(6 + v * 16),
                     borderRadius: 2,
-                    backgroundColor: '#ffffff4d',
+                    backgroundColor: playing ? palette.accent : '#ffffff4d',
                     marginRight: 3,
                   }}
                 />
