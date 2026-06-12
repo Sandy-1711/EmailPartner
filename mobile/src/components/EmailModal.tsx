@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronLeft } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
@@ -63,7 +64,7 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
 
         <View style={styles.topBar}>
           <Pressable onPress={onClose} style={styles.circleButton}>
-            <Text style={styles.circleGlyph}>‹</Text>
+            <ChevronLeft size={20} color="#fff" strokeWidth={2.2} />
           </Pressable>
           <Text style={[styles.timeTop, { color: 'rgba(255,255,255,0.5)' }]}>
             {timeOf(card.received_at)}
@@ -122,7 +123,12 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
 
           <Pressable onPress={() => setShowFull((s) => !s)} style={styles.fullToggle}>
             <Text style={styles.fullToggleText}>Read full email</Text>
-            <Text style={[styles.chevron, showFull && { transform: [{ rotate: '180deg' }] }]}>⌄</Text>
+            <ChevronDown
+              size={18}
+              color="#fff"
+              strokeWidth={2.2}
+              style={showFull ? { transform: [{ rotate: '180deg' }] } : undefined}
+            />
           </Pressable>
           {showFull && (
             <Text style={styles.fullBody}>

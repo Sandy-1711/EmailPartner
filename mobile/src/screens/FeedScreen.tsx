@@ -1,3 +1,4 @@
+import { SlidersHorizontal } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
@@ -122,7 +123,7 @@ export function FeedScreen({
         <View style={styles.headerRight}>
           <View style={styles.headerActions}>
             <Pressable onPress={() => setTweaksOpen(true)} style={styles.iconButton} hitSlop={6}>
-              <Text style={styles.iconText}>✦</Text>
+              <SlidersHorizontal size={14} color="#fff" strokeWidth={2.2} />
             </Pressable>
             <Pressable onPress={onSignOut} hitSlop={8}>
               <Text style={styles.signOut}>Sign out</Text>

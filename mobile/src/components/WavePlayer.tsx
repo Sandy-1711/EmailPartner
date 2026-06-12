@@ -1,3 +1,4 @@
+import { Pause, Play } from 'lucide-react-native';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -68,9 +69,17 @@ export function WavePlayer({ emailId, palette, playing, progress, duration, onTo
             },
           ]}
         >
-          <Text style={{ color: '#0a0612', fontSize: hero ? 22 : 16, lineHeight: hero ? 26 : 19 }}>
-            {playing ? '⏸' : '▶'}
-          </Text>
+          {playing ? (
+            <Pause size={hero ? 24 : 17} color="#0a0612" fill="#0a0612" strokeWidth={0} />
+          ) : (
+            <Play
+              size={hero ? 24 : 17}
+              color="#0a0612"
+              fill="#0a0612"
+              strokeWidth={0}
+              style={{ marginLeft: hero ? 3 : 2 }}
+            />
+          )}
         </Pressable>
 
         <View style={[styles.bars, { height: barH }]}>

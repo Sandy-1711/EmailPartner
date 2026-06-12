@@ -1,3 +1,4 @@
+import { Pause, Play, RotateCcw } from 'lucide-react-native';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -84,14 +85,24 @@ export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }:
           {failed ? (
             <Pressable onPress={() => onRetry(card)} style={styles.playPill}>
               <View style={[styles.playCircle, { backgroundColor: palette.accent }]}>
-                <Text style={styles.playGlyph}>↻</Text>
+                <RotateCcw size={12} color="#0a0612" strokeWidth={2.6} />
               </View>
               <Text style={styles.playText}>Retry</Text>
             </Pressable>
           ) : card.audio_url ? (
             <Pressable onPress={() => onTogglePlay(card)} style={styles.playPill}>
               <View style={[styles.playCircle, { backgroundColor: palette.accent }]}>
-                <Text style={styles.playGlyph}>{playing ? '⏸' : '▶'}</Text>
+                {playing ? (
+                  <Pause size={12} color="#0a0612" fill="#0a0612" strokeWidth={0} />
+                ) : (
+                  <Play
+                    size={12}
+                    color="#0a0612"
+                    fill="#0a0612"
+                    strokeWidth={0}
+                    style={{ marginLeft: 1 }}
+                  />
+                )}
               </View>
               <Text style={styles.playText}>{playing ? 'Playing' : 'Listen'}</Text>
             </Pressable>

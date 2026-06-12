@@ -13,6 +13,7 @@
     "expo-sensors": "~56.0.6",
     "expo-status-bar": "~56.0.4",
     "expo-web-browser": "~56.0.5",
+    "lucide-react-native": "^1.17.0",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-android-widget": "^0.20.3",
