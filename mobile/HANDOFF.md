@@ -2,6 +2,12 @@
 
 State as of 2026-06-12 (evening). Backend feature-complete + tested; the Expo app implements the **Echo Mail design** end-to-end, verified on the emulator (inbox, detail, deep links, playback, MediaSession via dumpsys). User feedback round 1 has been addressed (see "Latest session" below); the rest of their wishlist is the roadmap.
 
+## Feedback round 4b (committed; needs on-device verification)
+- **ALL playback now runs in the native NarrationService** — the app's `usePlayback` sends play/pausePlay/seekToMs commands and mirrors `getStatus()` at 4Hz. Why: dual speaker+earpiece output came from two audio stacks (expo-audio in-app + ExoPlayer widget service). expo-audio is no longer used for playback (still installed; could be removed later along with its config).
+- Crash on stop fixed (Animated transform must never swap to undefined — RN throws 'forEach of null').
+- Seek offset fixed (Android locationX is child-relative; use pageX minus measured container origin).
+- Verified by user on device: widget plays headlessly via the service (no FGS error). Still to verify after this rebuild: widget tap-to-stop, widget icon flip (temporary console.log markers '[widget]' are in the task handler — REMOVE once diagnosed), lock-screen card, single-output audio, in-app pause/resume/seek through the service.
+
 ## Feedback round 4 (committed; needs on-device verification)
 - **Native NarrationService** (`mobile/modules/narration/` — local Expo module, Kotlin, media3 1.9): singleton foreground MediaSessionService + ExoPlayer for widget playback. Fixes, by design: widget stop (service intent, no JS handle), the "failed to start expo-audio foreground service" error (we start ours synchronously inside the widget tap's background-FGS allowance), dual speaker+earpiece audio (orphan players gone — single player), lock-screen controls from the widget. App playback calls `Narration.stop()` before starting. NOTE: requires the rebuilt APK; JS wrapper no-ops on older binaries.
 - Seek rework: drag scrubs locally at 60fps with a visible scrub line, native seek commits on release; filled waveform bars pulse while playing (4 staggered native-driver loops).
