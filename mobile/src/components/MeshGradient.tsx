@@ -18,6 +18,8 @@ interface BlobSpec {
   top: string;
   left: string;
   w: string;
+  /** when set, height is this percentage; otherwise the blob stays circular */
+  h?: string;
   dur: number;
   delay: number;
   // drift end-state from the meshA–D keyframes, as fractions of card size
@@ -27,13 +29,22 @@ interface BlobSpec {
   s1: number;
 }
 
-// Blobs are sized off the container WIDTH with aspectRatio 1 so they stay
+// Cards: blobs sized off the container WIDTH with aspectRatio 1 so they stay
 // circular on wide cards (height-percent sizing flattened them into bands).
-const BLOBS: BlobSpec[] = [
+const BLOBS_CARD: BlobSpec[] = [
   { top: '-30%', left: '-12%', w: '62%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
   { top: '-18%', left: '52%', w: '58%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
   { top: '38%', left: '-8%', w: '60%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
   { top: '34%', left: '56%', w: '66%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
+];
+
+// Screens: the original overlapping full-bleed layout (tall containers keep
+// these near-circular, and it fills the page softly).
+const BLOBS_AMBIENT: BlobSpec[] = [
+  { top: '-10%', left: '-8%', w: '78%', h: '82%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
+  { top: '8%', left: '38%', w: '74%', h: '78%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
+  { top: '34%', left: '-12%', w: '82%', h: '80%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
+  { top: '30%', left: '40%', w: '88%', h: '86%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
 ];
 
 function Blob({
@@ -87,7 +98,7 @@ function Blob({
         top: spec.top as `${number}%`,
         left: spec.left as `${number}%`,
         width: spec.w as `${number}%`,
-        aspectRatio: 1,
+        ...(spec.h ? { height: spec.h as `${number}%` } : { aspectRatio: 1 }),
         transform: [{ translateX }, { translateY }, { scale }],
       }}
     >
@@ -149,7 +160,9 @@ export function MeshGradient({
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, overflow: 'hidden' }, style]}>
       <Animated.View style={[styles.field, { transform: parallax }]}>
-        {BLOBS.slice(0, Math.max(2, Math.min(4, blobCount))).map((spec, i) => (
+        {(veil === 'ambient' ? BLOBS_AMBIENT : BLOBS_CARD)
+          .slice(0, Math.max(2, Math.min(4, blobCount)))
+          .map((spec, i) => (
           <Blob
             key={i}
             color={palette.blobs[i % palette.blobs.length]}
