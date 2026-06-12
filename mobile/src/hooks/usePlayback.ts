@@ -27,6 +27,9 @@ export function usePlayback(): Playback {
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<AudioPlayer | null>(null);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // After a user command, ignore the ticker's playing-state sync briefly —
+  // the player reports "not playing" while buffering, which flickered the icon.
+  const commandAtRef = useRef(0);
 
   const stop = useCallback(() => {
     if (tickerRef.current) clearInterval(tickerRef.current);
@@ -49,6 +52,7 @@ export function usePlayback(): Playback {
         // tapping the active card: pause/resume rather than restart
         const p = playerRef.current;
         if (p) {
+          commandAtRef.current = Date.now();
           if (p.playing) {
             p.pause();
             setIsPlaying(false);
@@ -72,6 +76,7 @@ export function usePlayback(): Playback {
         if (status.didJustFinish) stop();
       });
       playerRef.current = player;
+      commandAtRef.current = Date.now();
       setPlayingId(card.id);
       setIsPlaying(true);
       setProgress(0);
@@ -86,7 +91,9 @@ export function usePlayback(): Playback {
       tickerRef.current = setInterval(() => {
         const p = playerRef.current;
         if (!p) return;
-        setIsPlaying(p.playing);
+        if (Date.now() - commandAtRef.current > 900) {
+          setIsPlaying(p.playing); // syncs lock-screen pause/resume only
+        }
         if (p.duration > 0) {
           setDuration(p.duration);
           setProgress(Math.min(1, p.currentTime / p.duration));
