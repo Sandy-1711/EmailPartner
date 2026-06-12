@@ -76,10 +76,12 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
       if (props.clickAction === 'PLAY_NARRATION' && props.clickActionData) {
         // synchronously, before any await: stay inside the FGS allowance window
         toggleNarration(props.clickActionData);
+        console.log('[widget] click handled, currentId =', Narration.currentId());
         const { card, message } = await fetchWidgetCard();
         props.renderWidget(
           <CardWidget card={card} message={message} playingId={Narration.currentId()} />
         );
+        console.log('[widget] re-rendered, card =', card?.id);
       }
       break;
     }

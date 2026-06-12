@@ -107,6 +107,8 @@ export function WavePlayer({
   const barH = hero ? 52 : 28;
   const barsWidth = useRef(0);
   const pulse = usePulse(playing);
+  // never swap transform to undefined — Animated crashes diffing it away
+  const still = useRef(new Animated.Value(1)).current;
   // While scrubbing, the waveform follows the finger via local state only;
   // the actual seek fires once on release.
   const [scrub, setScrub] = useState<number | null>(null);
@@ -163,7 +165,7 @@ export function WavePlayer({
         >
           {wave.map((v, i) => {
             const filled = i / wave.length <= shown;
-            const bar = (
+            return (
               <Animated.View
                 key={i}
                 style={{
@@ -172,11 +174,10 @@ export function WavePlayer({
                   minWidth: 2,
                   borderRadius: 4,
                   backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
-                  transform: playing && filled ? [{ scaleY: pulse[i % pulse.length] }] : undefined,
+                  transform: [{ scaleY: playing && filled ? pulse[i % pulse.length] : still }],
                 }}
               />
             );
-            return bar;
           })}
           {scrub != null && (
             <View
