@@ -2,10 +2,15 @@ package expo.modules.narration
 
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class NarrationModule : Module() {
+  private val mainHandler = Handler(Looper.getMainLooper())
+
   override fun definition() = ModuleDefinition {
     Name("Narration")
 
@@ -37,8 +42,36 @@ class NarrationModule : Module() {
       true
     }
 
+    Function("pausePlay") {
+      mainHandler.post {
+        NarrationService.instance?.mediaSession?.player?.let {
+          it.playWhenReady = !it.playWhenReady
+        }
+      }
+    }
+
+    Function("seekToMs") { positionMs: Double ->
+      mainHandler.post {
+        NarrationService.instance?.mediaSession?.player?.seekTo(positionMs.toLong())
+      }
+    }
+
     Function("currentId") {
       NarrationService.currentId
+    }
+
+    AsyncFunction("getStatus") { promise: Promise ->
+      mainHandler.post {
+        val player = NarrationService.instance?.mediaSession?.player
+        promise.resolve(
+          mapOf(
+            "id" to NarrationService.currentId,
+            "playing" to (player?.isPlaying ?: false),
+            "positionMs" to (player?.currentPosition ?: 0L).toDouble(),
+            "durationMs" to (player?.duration?.takeIf { it > 0 } ?: 0L).toDouble()
+          )
+        )
+      }
     }
   }
 }

@@ -17,10 +17,12 @@ import androidx.media3.session.MediaSessionService
  * and stop always works — no JS context or player handle required.
  */
 class NarrationService : MediaSessionService() {
-  private var mediaSession: MediaSession? = null
+  var mediaSession: MediaSession? = null
+    private set
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
     val player = ExoPlayer.Builder(this).build()
     player.addListener(object : Player.Listener {
       override fun onPlaybackStateChanged(playbackState: Int) {
@@ -74,6 +76,7 @@ class NarrationService : MediaSessionService() {
 
   override fun onDestroy() {
     currentId = null
+    instance = null
     mediaSession?.run {
       player.release()
       release()
@@ -92,5 +95,9 @@ class NarrationService : MediaSessionService() {
     /** Card id currently playing; process-wide, survives JS context teardown. */
     @Volatile
     var currentId: String? = null
+
+    /** Live service instance for main-thread player access from the module. */
+    @Volatile
+    var instance: NarrationService? = null
   }
 }

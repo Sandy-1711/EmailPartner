@@ -1,9 +1,3 @@
-import {
-  AudioPlayer,
-  createAudioPlayer,
-  setAudioModeAsync,
-  setIsAudioActiveAsync,
-} from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { EmailCard, phraseOf, senderOf } from '../lib/api';
@@ -11,55 +5,65 @@ import { Narration } from '../lib/narration';
 
 export interface Playback {
   playingId: string | null;
-  /** false while paused from the lock screen / notification */
+  /** false while paused (in-app, lock screen, or notification) */
   isPlaying: boolean;
   /** 0..1 for the currently playing card */
   progress: number;
   /** seconds; 0 while unknown */
   duration: number;
   toggle: (card: EmailCard) => void;
-  /** call on press-in so the stream is buffering before the tap lands */
+  /** press-in warm-up; kept for API compatibility (native start is fast) */
   preload: (card: EmailCard) => void;
-  /** scrub the active card; fraction 0..1 */
+  /** scrub the active narration; fraction 0..1 */
   seekTo: (fraction: number) => void;
   stop: () => void;
 }
 
 /**
- * One audio player for the whole app. Narration shows up on the lock screen
- * as a media session (like YouTube): phrase as title, sender as artist —
- * play/pause from the notification controls the same player.
+ * All playback runs in the native NarrationService (modules/narration):
+ * one ExoPlayer + MediaSession in a foreground service, shared with the
+ * widget. One player = one output route (no more earpiece+speaker mixes),
+ * stop always works, and the lock screen gets controls for free. This hook
+ * just sends commands and mirrors the service state for the waveforms.
  */
 export function usePlayback(): Playback {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const playerRef = useRef<AudioPlayer | null>(null);
-  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const preloadRef = useRef<{ id: string; player: AudioPlayer } | null>(null);
-  // After a user command, ignore the ticker's playing-state sync briefly —
-  // the player reports "not playing" while buffering, which flickered the icon.
+  // After a user command, the optimistic UI state wins over polled status
+  // briefly — the player reports "not playing" while buffering.
   const commandAtRef = useRef(0);
+  const durationMsRef = useRef(0);
 
-  const preload = useCallback((card: EmailCard) => {
-    if (!card.audio_url) return;
-    if (preloadRef.current?.id === card.id || playerRef.current) return;
-    try {
-      preloadRef.current = { id: card.id, player: createAudioPlayer({ uri: card.audio_url }) };
-    } catch {
-      preloadRef.current = null;
-    }
+  // mirror the service state (covers widget-started playback, lock-screen
+  // pause/resume, and track end) at 4Hz while the screen is open
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const status = await Narration.getStatus();
+        durationMsRef.current = status.durationMs;
+        if (Date.now() - commandAtRef.current > 900) {
+          setPlayingId(status.id);
+          setIsPlaying(status.playing);
+        }
+        if (status.id && status.durationMs > 0) {
+          setDuration(status.durationMs / 1000);
+          setProgress(Math.min(1, status.positionMs / status.durationMs));
+        } else if (!status.id) {
+          setProgress(0);
+          setDuration(0);
+        }
+      } catch {
+        // native module missing in this binary; nothing to mirror
+      }
+    }, 250);
+    return () => clearInterval(interval);
   }, []);
 
   const stop = useCallback(() => {
-    if (tickerRef.current) clearInterval(tickerRef.current);
-    tickerRef.current = null;
-    try {
-      playerRef.current?.clearLockScreenControls();
-    } catch {}
-    playerRef.current?.remove();
-    playerRef.current = null;
+    commandAtRef.current = Date.now();
+    Narration.stop();
     setPlayingId(null);
     setIsPlaying(false);
     setProgress(0);
@@ -69,90 +73,33 @@ export function usePlayback(): Playback {
   const toggle = useCallback(
     (card: EmailCard) => {
       if (!card.audio_url) return;
+      commandAtRef.current = Date.now();
       if (playingId === card.id) {
-        // tapping the active card: pause/resume rather than restart
-        const p = playerRef.current;
-        if (p) {
-          commandAtRef.current = Date.now();
-          if (p.playing) {
-            p.pause();
-            setIsPlaying(false);
-          } else {
-            p.play();
-            setIsPlaying(true);
-          }
-          return;
-        }
-        stop();
+        Narration.pausePlay();
+        setIsPlaying((p) => !p);
         return;
       }
-      if (tickerRef.current) clearInterval(tickerRef.current);
-      try {
-        playerRef.current?.clearLockScreenControls();
-      } catch {}
-      playerRef.current?.remove();
-      Narration.stop(); // never overlap with widget-initiated playback
-      setIsAudioActiveAsync(true).catch(() => {}); // widget stop may have disabled audio
-
-      // use the preloaded (already buffering) player when available
-      let player: AudioPlayer;
-      if (preloadRef.current?.id === card.id) {
-        player = preloadRef.current.player;
-        preloadRef.current = null;
-      } else {
-        preloadRef.current?.player.remove();
-        preloadRef.current = null;
-        player = createAudioPlayer({ uri: card.audio_url });
-      }
-      player.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) stop();
-      });
-      playerRef.current = player;
-      commandAtRef.current = Date.now();
+      Narration.play(card.id, card.audio_url, phraseOf(card), senderOf(card));
       setPlayingId(card.id);
       setIsPlaying(true);
       setProgress(0);
-      player.play();
-      try {
-        player.setActiveForLockScreen(
-          true,
-          { title: phraseOf(card), artist: senderOf(card), albumTitle: 'Echo Mail' },
-          { showSeekForward: false, showSeekBackward: false }
-        );
-      } catch {}
-      tickerRef.current = setInterval(() => {
-        const p = playerRef.current;
-        if (!p) return;
-        if (Date.now() - commandAtRef.current > 900) {
-          setIsPlaying(p.playing); // syncs lock-screen pause/resume only
-        }
-        if (p.duration > 0) {
-          setDuration(p.duration);
-          setProgress(Math.min(1, p.currentTime / p.duration));
-        }
-      }, 250);
     },
-    [playingId, stop]
+    [playingId]
   );
 
+  const preload = useCallback((_card: EmailCard) => {
+    // ExoPlayer prepare-on-play is fast enough; kept as a no-op hook point.
+  }, []);
+
   const seekTo = useCallback((fraction: number) => {
-    const p = playerRef.current;
-    if (!p || p.duration <= 0) return;
+    if (durationMsRef.current <= 0) return;
     const clamped = Math.max(0, Math.min(1, fraction));
     commandAtRef.current = Date.now();
     setProgress(clamped);
-    p.seekTo(clamped * p.duration);
+    Narration.seekToMs(clamped * durationMsRef.current);
   }, []);
 
-  useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      shouldRouteThroughEarpiece: false, // narration belongs on the speaker
-      interruptionMode: 'doNotMix', // required for lock-screen controls
-    }).catch(() => {});
-    return stop;
-  }, [stop]);
+  useEffect(() => stop, [stop]);
 
   return { playingId, isPlaying, progress, duration, toggle, preload, seekTo, stop };
 }
