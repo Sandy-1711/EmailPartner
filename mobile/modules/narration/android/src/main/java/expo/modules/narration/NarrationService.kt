@@ -1,6 +1,11 @@
 package expo.modules.narration
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -37,7 +42,36 @@ class NarrationService : MediaSessionService() {
   override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
     mediaSession
 
+  /**
+   * startForegroundService() demands startForeground() within 5s, but media3
+   * only promotes once playback is "ongoing" — a fast play->stop toggle kills
+   * the whole app (ForegroundServiceDidNotStartInTimeException). So we post a
+   * minimal notification immediately; media3 replaces it with the media one.
+   */
+  private fun ensureForeground() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val manager = getSystemService(NotificationManager::class.java)
+      if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+        manager.createNotificationChannel(
+          NotificationChannel(CHANNEL_ID, "Narration", NotificationManager.IMPORTANCE_LOW)
+        )
+      }
+    }
+    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+      .setSmallIcon(android.R.drawable.ic_media_play)
+      .setContentTitle("Echo Mail")
+      .setContentText("Narration")
+      .setOngoing(true)
+      .build()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+    } else {
+      startForeground(NOTIFICATION_ID, notification)
+    }
+  }
+
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    ensureForeground()
     when (intent?.action) {
       ACTION_PLAY -> {
         val url = intent.getStringExtra(EXTRA_URL)
@@ -67,6 +101,7 @@ class NarrationService : MediaSessionService() {
   private fun stopPlayback() {
     currentId = null
     mediaSession?.player?.stop()
+    stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
   }
 
@@ -91,6 +126,8 @@ class NarrationService : MediaSessionService() {
     const val EXTRA_URL = "url"
     const val EXTRA_TITLE = "title"
     const val EXTRA_ARTIST = "artist"
+    const val CHANNEL_ID = "narration"
+    const val NOTIFICATION_ID = 1001
 
     /** Card id currently playing; process-wide, survives JS context teardown. */
     @Volatile
