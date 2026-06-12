@@ -1,10 +1,12 @@
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { EmailCard } from '../lib/api';
+import { EmailCard, phraseOf, senderOf } from '../lib/api';
 
 export interface Playback {
   playingId: string | null;
+  /** false while paused from the lock screen / notification */
+  isPlaying: boolean;
   /** 0..1 for the currently playing card */
   progress: number;
   /** seconds; 0 while unknown */
@@ -13,9 +15,14 @@ export interface Playback {
   stop: () => void;
 }
 
-/** One audio player for the whole app; waveforms read progress from here. */
+/**
+ * One audio player for the whole app. Narration shows up on the lock screen
+ * as a media session (like YouTube): phrase as title, sender as artist —
+ * play/pause from the notification controls the same player.
+ */
 export function usePlayback(): Playback {
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<AudioPlayer | null>(null);
@@ -24,9 +31,13 @@ export function usePlayback(): Playback {
   const stop = useCallback(() => {
     if (tickerRef.current) clearInterval(tickerRef.current);
     tickerRef.current = null;
+    try {
+      playerRef.current?.clearLockScreenControls();
+    } catch {}
     playerRef.current?.remove();
     playerRef.current = null;
     setPlayingId(null);
+    setIsPlaying(false);
     setProgress(0);
     setDuration(0);
   }, []);
@@ -35,10 +46,25 @@ export function usePlayback(): Playback {
     (card: EmailCard) => {
       if (!card.audio_url) return;
       if (playingId === card.id) {
+        // tapping the active card: pause/resume rather than restart
+        const p = playerRef.current;
+        if (p) {
+          if (p.playing) {
+            p.pause();
+            setIsPlaying(false);
+          } else {
+            p.play();
+            setIsPlaying(true);
+          }
+          return;
+        }
         stop();
         return;
       }
       if (tickerRef.current) clearInterval(tickerRef.current);
+      try {
+        playerRef.current?.clearLockScreenControls();
+      } catch {}
       playerRef.current?.remove();
 
       const player = createAudioPlayer({ uri: card.audio_url });
@@ -47,11 +73,20 @@ export function usePlayback(): Playback {
       });
       playerRef.current = player;
       setPlayingId(card.id);
+      setIsPlaying(true);
       setProgress(0);
       player.play();
+      try {
+        player.setActiveForLockScreen(
+          true,
+          { title: phraseOf(card), artist: senderOf(card), albumTitle: 'Echo Mail' },
+          { showSeekForward: false, showSeekBackward: false }
+        );
+      } catch {}
       tickerRef.current = setInterval(() => {
         const p = playerRef.current;
         if (!p) return;
+        setIsPlaying(p.playing);
         if (p.duration > 0) {
           setDuration(p.duration);
           setProgress(Math.min(1, p.currentTime / p.duration));
@@ -62,9 +97,13 @@ export function usePlayback(): Playback {
   );
 
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix', // required for lock-screen controls
+    }).catch(() => {});
     return stop;
   }, [stop]);
 
-  return { playingId, progress, duration, toggle, stop };
+  return { playingId, isPlaying, progress, duration, toggle, stop };
 }

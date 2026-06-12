@@ -50,7 +50,8 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
   }
 
   const palette = paletteFor(card.tone);
-  const playing = playback.playingId === card.id;
+  const active = playback.playingId === card.id;
+  const playing = active && playback.isPlaying;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -96,8 +97,8 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
                 emailId={card.id}
                 palette={palette}
                 playing={playing}
-                progress={playing ? playback.progress : 0}
-                duration={playing ? playback.duration : 0}
+                progress={active ? playback.progress : 0}
+                duration={active ? playback.duration : 0}
                 onToggle={() => playback.toggle(card)}
                 size="hero"
               />

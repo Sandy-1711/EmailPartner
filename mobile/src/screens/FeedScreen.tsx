@@ -143,7 +143,7 @@ export function FeedScreen({
           <EchoCard
             card={item}
             tilt={tilt}
-            playing={playback.playingId === item.id}
+            playing={playback.playingId === item.id && playback.isPlaying}
             onTogglePlay={playback.toggle}
             onOpen={setOpenCard}
             onRetry={onRetry}
