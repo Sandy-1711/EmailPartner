@@ -87,9 +87,9 @@ pytest
 
 Unit tests run against an in-memory `DocumentDBManager` fake — no Mongo or network needed. Covered: queue claim/lease/requeue semantics, pipeline failure modes (summary/image/TTS), crypto envelope roundtrip, session signing, WAV packaging.
 
-## Mobile app (Android, `mobile/`)
+## Mobile app — Echo Mail (Android, `mobile/`)
 
-Expo (SDK 56) React Native app with a **home-screen widget**: the latest email's illustration under a frosted-glass panel; tapping it opens the app and plays the narration.
+Expo (SDK 56) React Native app implementing the **Echo Mail** design (from a Claude Design handoff): every email distilled to one phrase on a moving indigo/violet mesh gradient, with a waveform narration player. Space Grotesk type, Lucide icons, tone-driven palettes (urgent reads magenta, social reads teal — never orange).
 
 ```bash
 cd mobile
@@ -99,9 +99,11 @@ npx expo run:android                   # build + install on device/emulator
 # or just the APK: cd android && ./gradlew assembleDebug
 ```
 
-- Sign-in: the app opens the system browser at `/v1/auth/google/start?client=mobile`; the callback deep-links the session token back via `emailpartner://auth?token=…`, stored in SecureStore and sent as `Authorization: Bearer`.
-- Server URL is configurable on the sign-in screen — `http://10.0.2.2:8000` reaches your laptop from the emulator; use an ngrok HTTPS URL on a real phone.
-- The widget refreshes whenever the app fetches cards, plus Android's 30-minute background cycle. Add it from the launcher's widget picker ("EmailPartner").
+- **Screens**: Inbox (tone cards, gyro-parallax mesh), Detail (hero waveform player, "The gist", expandable full email), Sign-in. A Tweaks sheet (sliders button in the header) adjusts hue, motion, font size, density — persisted on-device.
+- **Audio**: one shared player; narration registers lock-screen media controls (phrase as title, sender as artist) and routes to the speaker. Playback survives backgrounding.
+- **Widget**: tone-gradient card with the phrase and a mini waveform. The play button starts narration headlessly — the app never opens. Updates whenever the app fetches plus Android's 30-minute cycle.
+- **Sign-in**: system browser at `/v1/auth/google/start?client=mobile`; the callback deep-links the session token back via `emailpartner://auth?token=…` (SecureStore, sent as `Authorization: Bearer`).
+- Server URL is configurable on the sign-in screen — `http://10.0.2.2:8000` reaches your laptop from the emulator; ngrok HTTPS on a real phone.
 
 ## What's not here yet
 

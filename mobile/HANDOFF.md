@@ -1,6 +1,19 @@
 # Echo Mail (EmailPartner mobile) — handoff
 
-State as of 2026-06-12. Backend feature-complete + tested; the Expo app implements the **Echo Mail design** (Claude Design handoff bundle) end-to-end and builds; remaining work is verification + the "make it real" steps below.
+State as of 2026-06-12 (evening). Backend feature-complete + tested; the Expo app implements the **Echo Mail design** end-to-end, verified on the emulator (inbox, detail, deep links, playback, MediaSession via dumpsys). User feedback round 1 has been addressed (see "Latest session" below); the rest of their wishlist is the roadmap.
+
+## Latest session (feedback round 1 — all committed)
+- Speaker routing fixed (`shouldRouteThroughEarpiece: false`).
+- **Widget plays narration headlessly** — play button fires custom `WIDGET_CLICK` handled in the JS task handler, which creates the player + MediaSession there; the app never opens. UNVERIFIED on a real device — emulator can't place widgets via adb. If playback dies when the headless context ends, the fallback is a tiny native foreground service.
+- Mesh blobs: gaussian falloff (they read as glow now, were visible circles).
+- **Tweaks panel** (sliders icon in header): hue rotate (Indigo/Magenta/Ocean/Forest, HSL math in `src/tweaks.tsx`), motion off/calm/normal/lively, font S/M/L, density — persisted in SecureStore, applied app-wide via TweaksProvider.
+- Lucide icons everywhere; **strictly no emojis** (user rule). Widget keeps geometric text chars (RemoteViews limitation).
+
+## User's remaining wishlist (= roadmap, in their priority language)
+1. **"Always awake" lock-screen + widget with swipeable email stack.** Reality: Android has no lock-screen widgets (removed in 5.0). The channel is **notifications**: post a rich notification per new email (phrase + Listen action that triggers headless playback — same mechanism as the widget play). Swipeable stack IN the widget is possible via the library's collection/ListWidget support (`RNWidgetCollectionService` exists) — render each email as a list row. Both are designed, not built.
+2. **Audio lag on tap** — mostly debug-build JS + WAV buffering. Fixes: release build, and preloading the player for the newest card.
+3. **Push-fresh widget** — currently app-poll + 30-min cycle; the real answer is FCM push from the backend worker when a card turns ready.
+4. **Agentic + memory features** (future) — keep the app architecture clean for it: api.ts is the only network seam, playback is one hook, tones/tweaks are contexts.
 
 ## What's DONE
 
