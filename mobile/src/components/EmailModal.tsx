@@ -45,8 +45,10 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
     }
   }, [card]);
 
+  // Unmount the Modal entirely when closed: toggling `visible` while also
+  // changing transparent/animationType breaks dismissal on Android.
   if (!card) {
-    return <Modal visible={false} transparent />;
+    return null;
   }
 
   const palette = paletteFor(card.tone);
