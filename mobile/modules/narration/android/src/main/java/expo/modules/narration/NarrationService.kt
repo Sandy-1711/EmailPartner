@@ -102,7 +102,30 @@ class NarrationService : MediaSessionService() {
     currentId = null
     mediaSession?.player?.stop()
     stopForeground(STOP_FOREGROUND_REMOVE)
+    notifyWidget()
     stopSelf()
+  }
+
+  /**
+   * Nudge the home-screen widget to re-render so its play state stays in
+   * sync even when playback ends naturally with the app closed (the JS
+   * task handler runs on APPWIDGET_UPDATE and reads currentId).
+   */
+  private fun notifyWidget() {
+    try {
+      val manager = android.appwidget.AppWidgetManager.getInstance(this)
+      val component = android.content.ComponentName(this, "$packageName.widget.EmailCard")
+      val ids = manager.getAppWidgetIds(component)
+      if (ids.isNotEmpty()) {
+        sendBroadcast(
+          Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+            setComponent(component)
+            putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+          }
+        )
+      }
+    } catch (_: Exception) {
+    }
   }
 
   override fun onTaskRemoved(rootIntent: Intent?) {
