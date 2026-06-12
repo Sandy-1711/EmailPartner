@@ -1,4 +1,9 @@
-import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import {
+  AudioPlayer,
+  createAudioPlayer,
+  setAudioModeAsync,
+  setIsAudioActiveAsync,
+} from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { EmailCard, phraseOf, senderOf } from '../lib/api';
@@ -12,6 +17,10 @@ export interface Playback {
   /** seconds; 0 while unknown */
   duration: number;
   toggle: (card: EmailCard) => void;
+  /** call on press-in so the stream is buffering before the tap lands */
+  preload: (card: EmailCard) => void;
+  /** scrub the active card; fraction 0..1 */
+  seekTo: (fraction: number) => void;
   stop: () => void;
 }
 
@@ -27,9 +36,20 @@ export function usePlayback(): Playback {
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<AudioPlayer | null>(null);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const preloadRef = useRef<{ id: string; player: AudioPlayer } | null>(null);
   // After a user command, ignore the ticker's playing-state sync briefly —
   // the player reports "not playing" while buffering, which flickered the icon.
   const commandAtRef = useRef(0);
+
+  const preload = useCallback((card: EmailCard) => {
+    if (!card.audio_url) return;
+    if (preloadRef.current?.id === card.id || playerRef.current) return;
+    try {
+      preloadRef.current = { id: card.id, player: createAudioPlayer({ uri: card.audio_url }) };
+    } catch {
+      preloadRef.current = null;
+    }
+  }, []);
 
   const stop = useCallback(() => {
     if (tickerRef.current) clearInterval(tickerRef.current);
@@ -70,8 +90,18 @@ export function usePlayback(): Playback {
         playerRef.current?.clearLockScreenControls();
       } catch {}
       playerRef.current?.remove();
+      setIsAudioActiveAsync(true).catch(() => {}); // widget stop may have disabled audio
 
-      const player = createAudioPlayer({ uri: card.audio_url });
+      // use the preloaded (already buffering) player when available
+      let player: AudioPlayer;
+      if (preloadRef.current?.id === card.id) {
+        player = preloadRef.current.player;
+        preloadRef.current = null;
+      } else {
+        preloadRef.current?.player.remove();
+        preloadRef.current = null;
+        player = createAudioPlayer({ uri: card.audio_url });
+      }
       player.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish) stop();
       });
@@ -103,6 +133,15 @@ export function usePlayback(): Playback {
     [playingId, stop]
   );
 
+  const seekTo = useCallback((fraction: number) => {
+    const p = playerRef.current;
+    if (!p || p.duration <= 0) return;
+    const clamped = Math.max(0, Math.min(1, fraction));
+    commandAtRef.current = Date.now();
+    setProgress(clamped);
+    p.seekTo(clamped * p.duration);
+  }, []);
+
   useEffect(() => {
     setAudioModeAsync({
       playsInSilentMode: true,
@@ -113,5 +152,5 @@ export function usePlayback(): Playback {
     return stop;
   }, [stop]);
 
-  return { playingId, isPlaying, progress, duration, toggle, stop };
+  return { playingId, isPlaying, progress, duration, toggle, preload, seekTo, stop };
 }

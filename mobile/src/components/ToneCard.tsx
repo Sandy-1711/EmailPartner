@@ -13,6 +13,7 @@ interface Props {
   tilt: Tilt;
   playing: boolean;
   onTogglePlay: (card: EmailCard) => void;
+  onPreload: (card: EmailCard) => void;
   onOpen: (card: EmailCard) => void;
   onRetry: (card: EmailCard) => void;
 }
@@ -45,7 +46,7 @@ export function ToneDot({ color }: { color: string }) {
   );
 }
 
-export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }: Props) {
+export function EchoCard({ card, tilt, playing, onTogglePlay, onPreload, onOpen, onRetry }: Props) {
   const { palette: paletteOf, speed, tweaks } = useTweaks();
   const palette = paletteOf(card.tone);
   const busy = card.processing_status === 'pending' || card.processing_status === 'processing';
@@ -100,7 +101,11 @@ export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }:
               <Text style={styles.playText}>Retry</Text>
             </Pressable>
           ) : card.audio_url ? (
-            <Pressable onPress={() => onTogglePlay(card)} style={styles.playPill}>
+            <Pressable
+              onPress={() => onTogglePlay(card)}
+              onPressIn={() => onPreload(card)}
+              style={styles.playPill}
+            >
               <View style={[styles.playCircle, { backgroundColor: palette.accent }]}>
                 {playing ? (
                   <Pause size={12} color="#0a0612" fill="#0a0612" strokeWidth={0} />

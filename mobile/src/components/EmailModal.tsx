@@ -119,6 +119,8 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
                 progress={active ? playback.progress : 0}
                 duration={active ? playback.duration : 0}
                 onToggle={() => playback.toggle(card)}
+                onPreload={() => playback.preload(card)}
+                onSeek={active ? playback.seekTo : undefined}
                 size="hero"
               />
             </View>

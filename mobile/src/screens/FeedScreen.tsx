@@ -161,6 +161,7 @@ export function FeedScreen({
             tilt={tilt}
             playing={playback.playingId === item.id && playback.isPlaying}
             onTogglePlay={playback.toggle}
+            onPreload={playback.preload}
             onOpen={setOpenCard}
             onRetry={onRetry}
           />

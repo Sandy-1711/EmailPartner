@@ -1,5 +1,5 @@
 import { Pause, Play } from 'lucide-react-native';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts } from '../theme';
@@ -44,20 +44,42 @@ interface Props {
   /** seconds; 0 when unknown */
   duration: number;
   onToggle: () => void;
+  /** press-in hint so the stream buffers before the tap completes */
+  onPreload?: () => void;
+  /** scrub by tapping/dragging the waveform (active card only) */
+  onSeek?: (fraction: number) => void;
   size?: 'hero' | 'mini';
 }
 
-export function WavePlayer({ emailId, palette, playing, progress, duration, onToggle, size = 'hero' }: Props) {
+export function WavePlayer({
+  emailId,
+  palette,
+  playing,
+  progress,
+  duration,
+  onToggle,
+  onPreload,
+  onSeek,
+  size = 'hero',
+}: Props) {
   const wave = useMemo(() => makeWave(emailId, size === 'hero' ? 44 : 34), [emailId, size]);
   const hero = size === 'hero';
   const btn = hero ? 60 : 42;
   const barH = hero ? 52 : 28;
+  const barsWidth = useRef(0);
+
+  const seekFromX = (x: number) => {
+    if (onSeek && barsWidth.current > 0) {
+      onSeek(x / barsWidth.current);
+    }
+  };
 
   return (
     <View style={{ width: '100%' }}>
       <View style={[styles.row, { gap: hero ? 16 : 11 }]}>
         <Pressable
           onPress={onToggle}
+          onPressIn={onPreload}
           style={({ pressed }) => [
             styles.button,
             {
@@ -82,7 +104,16 @@ export function WavePlayer({ emailId, palette, playing, progress, duration, onTo
           )}
         </Pressable>
 
-        <View style={[styles.bars, { height: barH }]}>
+        <View
+          style={[styles.bars, { height: barH }]}
+          onLayout={(e) => {
+            barsWidth.current = e.nativeEvent.layout.width;
+          }}
+          onStartShouldSetResponder={() => onSeek != null}
+          onMoveShouldSetResponder={() => onSeek != null}
+          onResponderGrant={(e) => seekFromX(e.nativeEvent.locationX)}
+          onResponderMove={(e) => seekFromX(e.nativeEvent.locationX)}
+        >
           {wave.map((v, i) => {
             const filled = i / wave.length <= progress;
             return (
