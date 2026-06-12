@@ -1,6 +1,7 @@
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
+import { makeWave } from '../components/WavePlayer';
 import { paletteFor } from '../tones';
 
 export interface WidgetCard {
@@ -12,81 +13,129 @@ export interface WidgetCard {
 }
 
 /**
- * Home-screen widget: tone-tinted gradient, the email distilled to one
- * phrase, and listen/read actions that deep-link into the app.
- * (RemoteViews can't run sensors or animations — the gyro parallax version
- * of this design lives in the in-app feed.)
+ * Echo Mail home-screen widget: tone gradient, the distilled phrase, and a
+ * static mini waveform that deep-links into narration.
+ *
+ * Layout note: react-native-android-widget renders the tree to a bitmap and
+ * shows it in an ImageView with scaleType="matrix" (no scaling, top-left
+ * anchored). Launchers often over-report the cell size, which clips the
+ * bitmap at the bottom/right — so everything sits inside a transparent
+ * safety inset and the visible card keeps its corners even when clipped.
  */
 export function CardWidget({ card, message }: { card: WidgetCard | null; message?: string }) {
   const palette = paletteFor(card?.tone);
+  const wave = card ? makeWave(card.id, 18) : [];
 
   return (
     <FlexWidget
-      clickAction="OPEN_APP"
       style={{
         width: 'match_parent',
         height: 'match_parent',
-        borderRadius: 24,
-        backgroundGradient: {
-          from: palette.from,
-          to: palette.to,
-          orientation: 'TL_BR',
-        },
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        padding: 6, // safety inset: clipping eats this, not the card
       }}
     >
-      <TextWidget
-        text={card ? card.sender.toUpperCase() : 'EMAILPARTNER'}
-        maxLines={1}
-        style={{ fontSize: 9, color: palette.dim, letterSpacing: 0.15 }}
-      />
-
-      <TextWidget
-        text={card ? card.phrase : message ?? 'Open the app to get started'}
-        maxLines={2}
+      <FlexWidget
+        clickAction={card ? 'OPEN_URI' : 'OPEN_APP'}
+        clickActionData={card ? { uri: `emailpartner://read/${card.id}` } : undefined}
         style={{
-          fontSize: card ? 17 : 13,
-          color: '#ffffff',
-          fontWeight: 'bold',
-          marginTop: 4,
-          marginBottom: 6,
+          width: 'match_parent',
+          height: 'match_parent',
+          borderRadius: 24,
+          backgroundGradient: {
+            from: palette.blobs[0],
+            to: palette.base,
+            orientation: 'TL_BR',
+          },
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
         }}
-      />
+      >
+        <FlexWidget
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            width: 'match_parent',
+          }}
+        >
+          <FlexWidget
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              backgroundColor: palette.dot,
+              marginRight: 7,
+            }}
+          />
+          <TextWidget
+            text={palette.label.toUpperCase()}
+            maxLines={1}
+            style={{ fontSize: 10, color: '#ffffffeb', letterSpacing: 0.08 }}
+          />
+        </FlexWidget>
 
-      {card ? (
-        <FlexWidget style={{ flexDirection: 'row' }}>
-          {card.hasAudio ? (
-            <FlexWidget
-              clickAction="OPEN_URI"
-              clickActionData={{ uri: `emailpartner://play/${card.id}` }}
-              style={{
-                backgroundColor: '#ffffff2b',
-                borderRadius: 14,
-                paddingHorizontal: 11,
-                paddingVertical: 5,
-                marginRight: 6,
-              }}
-            >
-              <TextWidget text="▶  Listen" style={{ fontSize: 11, color: '#ffffff' }} />
-            </FlexWidget>
+        <FlexWidget style={{ width: 'match_parent' }}>
+          {card ? (
+            <TextWidget
+              text={card.sender}
+              maxLines={1}
+              style={{ fontSize: 11, color: '#ffffffc4', marginBottom: 3 }}
+            />
           ) : null}
+          <TextWidget
+            text={card ? card.phrase : message ?? 'Open Echo Mail to get started'}
+            maxLines={2}
+            style={{
+              fontSize: card ? 19 : 14,
+              color: '#ffffff',
+              fontWeight: 'bold',
+              letterSpacing: -0.03,
+            }}
+          />
+        </FlexWidget>
+
+        {card && card.hasAudio ? (
           <FlexWidget
             clickAction="OPEN_URI"
-            clickActionData={{ uri: `emailpartner://read/${card.id}` }}
+            clickActionData={{ uri: `emailpartner://play/${card.id}` }}
             style={{
-              backgroundColor: '#ffffff2b',
-              borderRadius: 14,
-              paddingHorizontal: 11,
-              paddingVertical: 5,
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              marginTop: 8,
             }}
           >
-            <TextWidget text="👁  Read" style={{ fontSize: 11, color: '#ffffff' }} />
+            <FlexWidget
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: palette.accent,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 9,
+              }}
+            >
+              <TextWidget text="▶" style={{ fontSize: 11, color: '#0a0612' }} />
+            </FlexWidget>
+            <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              {wave.map((v, i) => (
+                <FlexWidget
+                  key={i}
+                  style={{
+                    width: 3,
+                    height: Math.round(6 + v * 16),
+                    borderRadius: 2,
+                    backgroundColor: '#ffffff4d',
+                    marginRight: 3,
+                  }}
+                />
+              ))}
+            </FlexWidget>
           </FlexWidget>
-        </FlexWidget>
-      ) : null}
+        ) : null}
+      </FlexWidget>
     </FlexWidget>
   );
 }
