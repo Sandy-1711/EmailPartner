@@ -145,9 +145,10 @@ export function CardWidget({
                   marginRight: 8,
                 }}
               >
-                <TextWidget
-                  text={playing ? '◼' : '▶'}
-                  style={{ fontSize: playing ? 9 : 10, color: '#0a0612' }}
+                <ImageWidget
+                  image={playing ? require('../../assets/mesh/icon-stop.png') : require('../../assets/mesh/icon-play.png')}
+                  imageWidth={12}
+                  imageHeight={12}
                 />
               </FlexWidget>
               {wave.map((v, i) => (

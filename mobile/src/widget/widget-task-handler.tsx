@@ -1,4 +1,10 @@
-import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import {
+  AudioPlayer,
+  createAudioPlayer,
+  setAudioModeAsync,
+  setIsAudioActiveAsync,
+} from 'expo-audio';
+import * as SecureStore from 'expo-secure-store';
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
@@ -56,11 +62,30 @@ function registry(): HeadlessAudio {
   return g.__epHeadlessAudio;
 }
 
+// The headless JS context can be destroyed between widget taps, losing the
+// player handle. The playing-id therefore lives in SecureStore (survives
+// anything), and stopping uses setIsAudioActiveAsync(false), which natively
+// pauses every player in the process — no handle required.
+const PLAYING_KEY = 'ep_widget_playing';
+
+async function storedPlayingId(): Promise<string | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(PLAYING_KEY);
+    if (!raw) return null;
+    const { id, at } = JSON.parse(raw) as { id: string; at: number };
+    // stale after 5 minutes (didJustFinish may never fire if the context died)
+    if (Date.now() - at > 5 * 60_000) return null;
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 export function headlessPlayingCardId(): string | null {
   return registry().playingId;
 }
 
-function stopHeadless() {
+async function stopHeadless() {
   const reg = registry();
   try {
     reg.player?.clearLockScreenControls();
@@ -70,6 +95,8 @@ function stopHeadless() {
   } catch {}
   reg.player = null;
   reg.playingId = null;
+  await setIsAudioActiveAsync(false).catch(() => {}); // pauses orphans too
+  await SecureStore.deleteItemAsync(PLAYING_KEY).catch(() => {});
 }
 
 async function playHeadless(data: Record<string, unknown>): Promise<void> {
@@ -78,13 +105,13 @@ async function playHeadless(data: Record<string, unknown>): Promise<void> {
   if (!id || !audioUrl) return;
 
   const reg = registry();
-  if (reg.playingId === id) {
-    // second tap on the same card = stop (also covers a lost player handle:
-    // clear state so the next tap starts clean instead of stacking players)
-    stopHeadless();
+  const playing = reg.playingId ?? (await storedPlayingId());
+  if (playing === id) {
+    await stopHeadless();
     return;
   }
-  stopHeadless();
+  await stopHeadless();
+  await setIsAudioActiveAsync(true).catch(() => {});
 
   await setAudioModeAsync({
     playsInSilentMode: true,
@@ -95,10 +122,13 @@ async function playHeadless(data: Record<string, unknown>): Promise<void> {
 
   const player = createAudioPlayer({ uri: audioUrl });
   player.addListener('playbackStatusUpdate', (status) => {
-    if (status.didJustFinish) stopHeadless();
+    if (status.didJustFinish) void stopHeadless();
   });
   reg.player = player;
   reg.playingId = id;
+  await SecureStore.setItemAsync(PLAYING_KEY, JSON.stringify({ id, at: Date.now() })).catch(
+    () => {}
+  );
   player.play();
   try {
     // The MediaSession foreground service keeps the headless process alive
@@ -120,18 +150,28 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_ADDED':
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
-      const { card, message } = await fetchWidgetCard();
+      const [{ card, message }, playingId] = await Promise.all([
+        fetchWidgetCard(),
+        storedPlayingId(),
+      ]);
       props.renderWidget(
-        <CardWidget card={card} message={message} playingId={registry().playingId} />
+        <CardWidget card={card} message={message} playingId={registry().playingId ?? playingId} />
       );
       break;
     }
     case 'WIDGET_CLICK': {
       if (props.clickAction === 'PLAY_NARRATION' && props.clickActionData) {
         await playHeadless(props.clickActionData);
-        const { card, message } = await fetchWidgetCard();
+        const [{ card, message }, playingId] = await Promise.all([
+          fetchWidgetCard(),
+          storedPlayingId(),
+        ]);
         props.renderWidget(
-          <CardWidget card={card} message={message} playingId={registry().playingId} />
+          <CardWidget
+            card={card}
+            message={message}
+            playingId={registry().playingId ?? playingId}
+          />
         );
       }
       break;
