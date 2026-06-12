@@ -1,12 +1,18 @@
 export const colors = {
-  bg: '#0b0d12',
-  panel: 'rgba(255, 255, 255, 0.05)',
-  panelBorder: 'rgba(255, 255, 255, 0.10)',
-  text: '#e9ecf2',
-  textDim: '#98a0b3',
-  accent: '#7c9bff',
-  accent2: '#b58cff',
+  bg: '#070510',
+  text: '#ffffff',
+  textDim: 'rgba(255,255,255,0.55)',
+  textFaint: 'rgba(255,255,255,0.5)',
+  hairline: 'rgba(255,255,255,0.08)',
+  pill: 'rgba(255,255,255,0.06)',
+  pillBorder: 'rgba(255,255,255,0.07)',
   danger: '#ff7a7a',
 };
 
-export const radius = 18;
+/** Space Grotesk — custom fonts on Android need explicit families per weight. */
+export const fonts = {
+  regular: 'SpaceGrotesk_400Regular',
+  medium: 'SpaceGrotesk_500Medium',
+  semibold: 'SpaceGrotesk_600SemiBold',
+  bold: 'SpaceGrotesk_700Bold',
+};
