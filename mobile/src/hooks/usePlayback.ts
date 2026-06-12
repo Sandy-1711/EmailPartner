@@ -37,29 +37,33 @@ export function usePlayback(): Playback {
   const durationMsRef = useRef(0);
 
   // mirror the service state (covers widget-started playback, lock-screen
-  // pause/resume, and track end) at 4Hz while the screen is open
+  // pause/resume, and track end). Adaptive cadence: 4Hz only while active,
+  // 1Hz idle — no busy polling when nothing plays.
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await Narration.getStatus();
-        durationMsRef.current = status.durationMs;
-        if (Date.now() - commandAtRef.current > 900) {
-          setPlayingId(status.id);
-          setIsPlaying(status.playing);
+    const interval = setInterval(
+      async () => {
+        try {
+          const status = await Narration.getStatus();
+          durationMsRef.current = status.durationMs;
+          if (Date.now() - commandAtRef.current > 900) {
+            setPlayingId(status.id);
+            setIsPlaying(status.playing);
+          }
+          if (status.id && status.durationMs > 0) {
+            setDuration(status.durationMs / 1000);
+            setProgress(Math.min(1, status.positionMs / status.durationMs));
+          } else if (!status.id) {
+            setProgress(0);
+            setDuration(0);
+          }
+        } catch {
+          // native module missing in this binary; nothing to mirror
         }
-        if (status.id && status.durationMs > 0) {
-          setDuration(status.durationMs / 1000);
-          setProgress(Math.min(1, status.positionMs / status.durationMs));
-        } else if (!status.id) {
-          setProgress(0);
-          setDuration(0);
-        }
-      } catch {
-        // native module missing in this binary; nothing to mirror
-      }
-    }, 250);
+      },
+      playingId ? 250 : 1000
+    );
     return () => clearInterval(interval);
-  }, []);
+  }, [playingId]);
 
   const stop = useCallback(() => {
     commandAtRef.current = Date.now();

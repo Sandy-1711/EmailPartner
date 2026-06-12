@@ -1,5 +1,10 @@
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import {
+  FlexWidget,
+  ImageWidget,
+  OverlapWidget,
+  TextWidget,
+} from 'react-native-android-widget';
 
 import { makeWave } from '../components/WavePlayer';
 import { paletteFor } from '../tones';
@@ -13,12 +18,25 @@ export interface WidgetCard {
   audioUrl: string | null;
 }
 
+// Pre-rendered mesh backgrounds (assets/mesh/, generated to match tones.ts).
+const MESH_BG: Record<string, number> = {
+  urgent: require('../../assets/mesh/widget-urgent.png'),
+  social: require('../../assets/mesh/widget-social.png'),
+  informative: require('../../assets/mesh/widget-informative.png'),
+  transactional: require('../../assets/mesh/widget-transactional.png'),
+  promotional: require('../../assets/mesh/widget-promotional.png'),
+};
+
+const MESH_W = 320;
+const MESH_H = 150;
+
 /**
- * Echo Mail home-screen widget. Gradient-only rendering: ImageWidget assets
- * load through Metro in debug builds, and a failed load blanks the whole
- * rendered bitmap (clicks keep working on an invisible widget). Play/stop
- * runs in the native NarrationService — the app never opens — and the
- * click handler re-renders instantly from the click payload, no fetch.
+ * Echo Mail home-screen widget, layered for resilience: a gradient base
+ * that can't fail, the mesh bitmap above it as enhancement (debug builds
+ * load it via Metro — if that fails only the texture is lost, never the
+ * card), and content on top. Play/stop runs in the native NarrationService
+ * (the app never opens); the click handler re-renders instantly from the
+ * click payload.
  */
 export function CardWidget({
   card,
@@ -32,6 +50,7 @@ export function CardWidget({
   const palette = paletteFor(card?.tone);
   const wave = card ? makeWave(card.id, 16) : [];
   const playing = card != null && playingId === card.id;
+  const mesh = MESH_BG[card?.tone ?? 'informative'] ?? MESH_BG.informative;
 
   return (
     <FlexWidget
@@ -41,24 +60,35 @@ export function CardWidget({
         padding: 6, // safety inset: launcher over-reports clip this, not the card
       }}
     >
-      <FlexWidget
-        clickAction={card ? 'OPEN_URI' : 'OPEN_APP'}
-        clickActionData={card ? { uri: `emailpartner://read/${card.id}` } : undefined}
-        style={{
-          width: 'match_parent',
-          height: 'match_parent',
-          borderRadius: 24,
-          backgroundGradient: {
-            from: palette.blobs[1],
-            to: palette.base,
-            orientation: 'TL_BR',
-          },
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-        }}
-      >
+      <OverlapWidget style={{ width: 'match_parent', height: 'match_parent' }}>
+        {/* base: gradient card that always renders */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            height: 'match_parent',
+            borderRadius: 24,
+            backgroundGradient: {
+              from: palette.blobs[1],
+              to: palette.base,
+              orientation: 'TL_BR',
+            },
+          }}
+        />
+        {/* enhancement: the real mesh texture */}
+        <ImageWidget image={mesh} imageWidth={MESH_W} imageHeight={MESH_H} radius={24} />
+        {/* content */}
+        <FlexWidget
+          clickAction={card ? 'OPEN_URI' : 'OPEN_APP'}
+          clickActionData={card ? { uri: `emailpartner://read/${card.id}` } : undefined}
+          style={{
+            width: 'match_parent',
+            height: 'match_parent',
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+          }}
+        >
         <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
           <FlexWidget
             style={{
@@ -147,7 +177,8 @@ export function CardWidget({
             ))}
           </FlexWidget>
         ) : null}
-      </FlexWidget>
+        </FlexWidget>
+      </OverlapWidget>
     </FlexWidget>
   );
 }
