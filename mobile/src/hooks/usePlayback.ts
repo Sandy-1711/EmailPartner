@@ -100,6 +100,7 @@ export function usePlayback(): Playback {
     setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
+      shouldRouteThroughEarpiece: false, // narration belongs on the speaker
       interruptionMode: 'doNotMix', // required for lock-screen controls
     }).catch(() => {});
     return stop;
