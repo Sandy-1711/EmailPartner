@@ -1,14 +1,15 @@
 import { Pause, Play } from 'lucide-react-native';
-import React, { useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts } from '../theme';
 import type { TonePalette } from '../tones';
 
 /**
  * Echo Mail "listen to summary" control: accent play/pause circle + a
- * waveform that fills as it plays. The wave shape is deterministic per
- * email id so it never reflows between renders (ported from the design).
+ * waveform that fills as it plays, pulses while playing, and scrubs by
+ * touch (drag shows a scrub bar; the seek commits on release so dragging
+ * stays 60fps instead of hammering the native player).
  */
 
 function seedFrom(id: string): number {
@@ -35,6 +36,44 @@ function fmt(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** Staggered pulse shared across bars — 4 animated values, bars cycle them. */
+function usePulse(playing: boolean): Animated.Value[] {
+  const values = useRef([0, 1, 2, 3].map(() => new Animated.Value(1))).current;
+  useEffect(() => {
+    if (!playing) {
+      values.forEach((v) => v.setValue(1));
+      return;
+    }
+    const loops = values.map((v, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, {
+            toValue: 1.35,
+            duration: 260 + i * 70,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(v, {
+            toValue: 0.8,
+            duration: 260 + i * 70,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(v, {
+            toValue: 1,
+            duration: 200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      )
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [playing, values]);
+  return values;
+}
+
 interface Props {
   emailId: string;
   palette: TonePalette;
@@ -46,7 +85,7 @@ interface Props {
   onToggle: () => void;
   /** press-in hint so the stream buffers before the tap completes */
   onPreload?: () => void;
-  /** scrub by tapping/dragging the waveform (active card only) */
+  /** scrub by touch (active card only); called once, on release */
   onSeek?: (fraction: number) => void;
   size?: 'hero' | 'mini';
 }
@@ -67,12 +106,14 @@ export function WavePlayer({
   const btn = hero ? 60 : 42;
   const barH = hero ? 52 : 28;
   const barsWidth = useRef(0);
+  const pulse = usePulse(playing);
+  // While scrubbing, the waveform follows the finger via local state only;
+  // the actual seek fires once on release.
+  const [scrub, setScrub] = useState<number | null>(null);
+  const shown = scrub ?? progress;
 
-  const seekFromX = (x: number) => {
-    if (onSeek && barsWidth.current > 0) {
-      onSeek(x / barsWidth.current);
-    }
-  };
+  const fractionFromX = (x: number) =>
+    barsWidth.current > 0 ? Math.max(0, Math.min(1, x / barsWidth.current)) : 0;
 
   return (
     <View style={{ width: '100%' }}>
@@ -111,13 +152,19 @@ export function WavePlayer({
           }}
           onStartShouldSetResponder={() => onSeek != null}
           onMoveShouldSetResponder={() => onSeek != null}
-          onResponderGrant={(e) => seekFromX(e.nativeEvent.locationX)}
-          onResponderMove={(e) => seekFromX(e.nativeEvent.locationX)}
+          onResponderGrant={(e) => setScrub(fractionFromX(e.nativeEvent.locationX))}
+          onResponderMove={(e) => setScrub(fractionFromX(e.nativeEvent.locationX))}
+          onResponderRelease={(e) => {
+            const f = fractionFromX(e.nativeEvent.locationX);
+            setScrub(null);
+            onSeek?.(f);
+          }}
+          onResponderTerminate={() => setScrub(null)}
         >
           {wave.map((v, i) => {
-            const filled = i / wave.length <= progress;
-            return (
-              <View
+            const filled = i / wave.length <= shown;
+            const bar = (
+              <Animated.View
                 key={i}
                 style={{
                   flex: 1,
@@ -125,18 +172,29 @@ export function WavePlayer({
                   minWidth: 2,
                   borderRadius: 4,
                   backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
+                  transform: playing && filled ? [{ scaleY: pulse[i % pulse.length] }] : undefined,
                 }}
               />
             );
+            return bar;
           })}
+          {scrub != null && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.scrubLine,
+                { left: `${scrub * 100}%`, backgroundColor: palette.accent },
+              ]}
+            />
+          )}
         </View>
       </View>
 
       {hero && (
         <View style={styles.times}>
-          <Text style={styles.time}>{fmt(progress * duration)}</Text>
+          <Text style={styles.time}>{fmt(shown * duration)}</Text>
           <Text style={styles.time}>
-            {playing ? 'Now playing' : progress >= 1 ? 'Replay' : 'Summary'}
+            {scrub != null ? 'Scrubbing' : playing ? 'Now playing' : progress >= 1 ? 'Replay' : 'Summary'}
           </Text>
           <Text style={styles.time}>{duration > 0 ? fmt(duration) : '–:––'}</Text>
         </View>
@@ -158,6 +216,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
   },
   bars: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2.5 },
+  scrubLine: {
+    position: 'absolute',
+    top: -6,
+    bottom: -6,
+    width: 3,
+    borderRadius: 2,
+    opacity: 0.95,
+  },
   times: {
     flexDirection: 'row',
     justifyContent: 'space-between',
