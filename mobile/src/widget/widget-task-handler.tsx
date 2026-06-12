@@ -40,20 +40,36 @@ async function fetchWidgetCard(): Promise<{ card: WidgetCard | null; message?: s
 
 /* ---------- headless playback (widget tap, app never opens) ---------- */
 
-let headlessPlayer: AudioPlayer | null = null;
-let headlessPlayingId: string | null = null;
+// Stored on globalThis: module state can be lost when Android tears the
+// headless JS context down between widget clicks; globalThis survives as
+// long as the process does (the MediaSession foreground service holds it).
+interface HeadlessAudio {
+  player: AudioPlayer | null;
+  playingId: string | null;
+}
+
+function registry(): HeadlessAudio {
+  const g = globalThis as typeof globalThis & { __epHeadlessAudio?: HeadlessAudio };
+  if (!g.__epHeadlessAudio) {
+    g.__epHeadlessAudio = { player: null, playingId: null };
+  }
+  return g.__epHeadlessAudio;
+}
 
 export function headlessPlayingCardId(): string | null {
-  return headlessPlayingId;
+  return registry().playingId;
 }
 
 function stopHeadless() {
+  const reg = registry();
   try {
-    headlessPlayer?.clearLockScreenControls();
+    reg.player?.clearLockScreenControls();
   } catch {}
-  headlessPlayer?.remove();
-  headlessPlayer = null;
-  headlessPlayingId = null;
+  try {
+    reg.player?.remove();
+  } catch {}
+  reg.player = null;
+  reg.playingId = null;
 }
 
 async function playHeadless(data: Record<string, unknown>): Promise<void> {
@@ -61,7 +77,10 @@ async function playHeadless(data: Record<string, unknown>): Promise<void> {
   const audioUrl = typeof data.audioUrl === 'string' ? data.audioUrl : null;
   if (!id || !audioUrl) return;
 
-  if (headlessPlayingId === id) {
+  const reg = registry();
+  if (reg.playingId === id) {
+    // second tap on the same card = stop (also covers a lost player handle:
+    // clear state so the next tap starts clean instead of stacking players)
     stopHeadless();
     return;
   }
@@ -78,8 +97,8 @@ async function playHeadless(data: Record<string, unknown>): Promise<void> {
   player.addListener('playbackStatusUpdate', (status) => {
     if (status.didJustFinish) stopHeadless();
   });
-  headlessPlayer = player;
-  headlessPlayingId = id;
+  reg.player = player;
+  reg.playingId = id;
   player.play();
   try {
     // The MediaSession foreground service keeps the headless process alive
@@ -103,7 +122,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_RESIZED': {
       const { card, message } = await fetchWidgetCard();
       props.renderWidget(
-        <CardWidget card={card} message={message} playingId={headlessPlayingId} />
+        <CardWidget card={card} message={message} playingId={registry().playingId} />
       );
       break;
     }
@@ -112,7 +131,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
         await playHeadless(props.clickActionData);
         const { card, message } = await fetchWidgetCard();
         props.renderWidget(
-          <CardWidget card={card} message={message} playingId={headlessPlayingId} />
+          <CardWidget card={card} message={message} playingId={registry().playingId} />
         );
       }
       break;
