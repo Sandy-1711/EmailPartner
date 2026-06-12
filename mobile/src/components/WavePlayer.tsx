@@ -106,6 +106,8 @@ export function WavePlayer({
   const btn = hero ? 60 : 42;
   const barH = hero ? 52 : 28;
   const barsWidth = useRef(0);
+  const barsPageX = useRef(0);
+  const barsRef = useRef<View | null>(null);
   const pulse = usePulse(playing);
   // never swap transform to undefined — Animated crashes diffing it away
   const still = useRef(new Animated.Value(1)).current;
@@ -114,8 +116,12 @@ export function WavePlayer({
   const [scrub, setScrub] = useState<number | null>(null);
   const shown = scrub ?? progress;
 
-  const fractionFromX = (x: number) =>
-    barsWidth.current > 0 ? Math.max(0, Math.min(1, x / barsWidth.current)) : 0;
+  // locationX is relative to whichever child bar the finger hits, so seek
+  // math uses pageX against the container's measured window position.
+  const fractionFromPageX = (pageX: number) =>
+    barsWidth.current > 0
+      ? Math.max(0, Math.min(1, (pageX - barsPageX.current) / barsWidth.current))
+      : 0;
 
   return (
     <View style={{ width: '100%' }}>
@@ -148,16 +154,20 @@ export function WavePlayer({
         </Pressable>
 
         <View
+          ref={barsRef}
           style={[styles.bars, { height: barH }]}
           onLayout={(e) => {
             barsWidth.current = e.nativeEvent.layout.width;
+            barsRef.current?.measureInWindow((x) => {
+              barsPageX.current = x;
+            });
           }}
           onStartShouldSetResponder={() => onSeek != null}
           onMoveShouldSetResponder={() => onSeek != null}
-          onResponderGrant={(e) => setScrub(fractionFromX(e.nativeEvent.locationX))}
-          onResponderMove={(e) => setScrub(fractionFromX(e.nativeEvent.locationX))}
+          onResponderGrant={(e) => setScrub(fractionFromPageX(e.nativeEvent.pageX))}
+          onResponderMove={(e) => setScrub(fractionFromPageX(e.nativeEvent.pageX))}
           onResponderRelease={(e) => {
-            const f = fractionFromX(e.nativeEvent.locationX);
+            const f = fractionFromPageX(e.nativeEvent.pageX);
             setScrub(null);
             onSeek?.(f);
           }}
