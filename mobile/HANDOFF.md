@@ -1,6 +1,25 @@
 # Echo Mail (EmailPartner mobile) — handoff
 
-State as of 2026-06-12 (evening). Backend feature-complete + tested; the Expo app implements the **Echo Mail design** end-to-end, verified on the emulator (inbox, detail, deep links, playback, MediaSession via dumpsys). User feedback round 1 has been addressed (see "Latest session" below); the rest of their wishlist is the roadmap.
+State as of 2026-06-12 (night). Backend feature-complete + tested. App implements the Echo Mail design; **audio now works app + widget via the native NarrationService** (user-confirmed). Two known bugs remain (next section). The user is frustrated with the iteration count — next session: fix precisely, verify on-device BEFORE claiming done, no scattershot changes.
+
+## OPEN BUGS — fix these first (diagnosed, not yet fixed)
+
+1. **Widget shows the previous (flat gradient) background instead of the mesh texture.**
+   Diagnosis: the layered CardWidget renders gradient base + mesh ImageWidget on top. In DEBUG builds, `require()`d images resolve through Metro; when that load fails inside the native bitmap render, only the gradient base shows — which IS the "previous background". So the mesh asset is still failing to load through Metro in the widget's headless render path (it worked once at ~19:50 when Metro was freshly up).
+   Fix options (pick one, verify on device):
+   a. Ship mesh PNGs as native Android drawables instead of Metro assets: copy `assets/mesh/widget-*.png` into `mobile/android/app/src/main/res/drawable-nodpi/` via a tiny expo config plugin (CNG-safe) or into the narration module's `android/src/main/res/`, and reference by resource name (ImageWidget accepts `android.resource://` URIs? check lib docs) — bulletproof in debug AND release.
+   b. Just build RELEASE (`gradlew assembleRelease`) where assets are bundled — debug-only problem disappears; document the debug limitation.
+
+2. **After audio ends naturally, the widget icon takes long to flip back to play.**
+   Diagnosis: the service's `notifyWidget()` broadcast fires immediately on STATE_ENDED, BUT the WIDGET_UPDATE path in `widget-task-handler.tsx` awaits `fetchWidgetCard()` (an HTTP request through adb-reverse + debug JS) before rendering. The icon waits on the network.
+   Fix: cache the last rendered WidgetCard (module/global var set by every render path, or SecureStore) and in WIDGET_UPDATE render IMMEDIATELY from cache with fresh `Narration.currentId()`, then fetch and re-render only if data changed (same pattern as the click path, which is instant).
+
+## What is VERIFIED WORKING on the user's phone (don't break it)
+- Audio from app AND widget via native NarrationService (single ExoPlayer, foreground MediaSessionService, media3 1.9). Play, stop, no app-kill (startForeground called synchronously in onStartCommand — keep this).
+- Widget tap-to-toggle with instant icon flip (renders from click payload, no fetch).
+- Seek/scrub on the hero waveform (pageX-based, commit-on-release). Waveform pulse animation REMOVED at user request — do not re-add.
+- Stereo "speaker+earpiece" output is the phone's stereo pair (Motorola) — normal, not a bug.
+- Crash classes fixed: never swap/remove a native-driven Animated transform (Fabric 'forEach of null'); never let startForegroundService run without an immediate startForeground.
 
 ## Feedback round 5 (committed)
 - **App-kill fixed**: NarrationService now calls startForeground synchronously in onStartCommand (minimal notification, media3 replaces it). Root cause: fast play->stop toggles beat media3's foreground promotion → ForegroundServiceDidNotStartInTimeException killed the process.
