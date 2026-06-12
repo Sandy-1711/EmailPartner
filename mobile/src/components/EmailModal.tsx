@@ -12,7 +12,7 @@ import type { Tilt } from '../hooks/useTilt';
 import type { Playback } from '../hooks/usePlayback';
 import { CardDetail, EmailCard, getCard, phraseOf, senderOf, summaryOf } from '../lib/api';
 import { fonts } from '../theme';
-import { paletteFor } from '../tones';
+import { useTweaks } from '../tweaks';
 import { MeshGradient } from './MeshGradient';
 import { ToneDot } from './ToneCard';
 import { WavePlayer } from './WavePlayer';
@@ -36,6 +36,7 @@ function timeOf(iso: string | null): string {
 export function EmailDetail({ card, tilt, playback, onClose }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [showFull, setShowFull] = useState(false);
+  const { palette: paletteOf, speed, tweaks } = useTweaks();
 
   useEffect(() => {
     setDetail(null);
@@ -51,14 +52,14 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
     return null;
   }
 
-  const palette = paletteFor(card.tone);
+  const palette = paletteOf(card.tone);
   const active = playback.playingId === card.id;
   const playing = active && playback.isPlaying;
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
-        <MeshGradient palette={palette} tilt={tilt} veil="ambient" drift={160} />
+        <MeshGradient palette={palette} tilt={tilt} veil="ambient" drift={160} speed={speed} />
 
         <View style={styles.topBar}>
           <Pressable onPress={onClose} style={styles.circleButton}>
@@ -75,7 +76,14 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
             <Text style={styles.toneLabel}>{palette.label.toUpperCase()}</Text>
           </View>
 
-          <Text style={styles.phrase}>{phraseOf(card)}</Text>
+          <Text
+            style={[
+              styles.phrase,
+              { fontSize: 40 * tweaks.fontScale, lineHeight: 41 * tweaks.fontScale },
+            ]}
+          >
+            {phraseOf(card)}
+          </Text>
 
           <View style={styles.senderRow}>
             <View style={styles.avatar}>
@@ -108,7 +116,9 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
           ) : null}
 
           <Text style={styles.sectionLabel}>THE GIST</Text>
-          <Text style={styles.gist}>{summaryOf(card)}</Text>
+          <Text style={[styles.gist, { fontSize: 19 * tweaks.fontScale }]}>
+            {summaryOf(card)}
+          </Text>
 
           <Pressable onPress={() => setShowFull((s) => !s)} style={styles.fullToggle}>
             <Text style={styles.fullToggleText}>Read full email</Text>

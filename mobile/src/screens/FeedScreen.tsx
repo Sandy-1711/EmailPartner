@@ -11,11 +11,12 @@ import {
 import { EmailDetail } from '../components/EmailModal';
 import { MeshGradient } from '../components/MeshGradient';
 import { EchoCard } from '../components/ToneCard';
+import { TweaksSheet } from '../components/TweaksSheet';
 import { usePlayback } from '../hooks/usePlayback';
 import { useTilt } from '../hooks/useTilt';
 import { ApiError, EmailCard, getCards, getMe, Me, retryCard } from '../lib/api';
 import { colors, fonts } from '../theme';
-import { TONES } from '../tones';
+import { useTweaks } from '../tweaks';
 import { refreshWidget } from '../widget/refresh-widget';
 
 const POLL_MS = 4000;
@@ -39,8 +40,10 @@ export function FeedScreen({
   const [cards, setCards] = useState<EmailCard[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [openCard, setOpenCard] = useState<EmailCard | null>(null);
+  const [tweaksOpen, setTweaksOpen] = useState(false);
   const tilt = useTilt();
   const playback = usePlayback();
+  const { palette: paletteOf, speed } = useTweaks();
 
   const refresh = useCallback(async () => {
     try {
@@ -108,7 +111,7 @@ export function FeedScreen({
     <View style={styles.container}>
       {/* faint ambient mesh behind the whole inbox, like the design */}
       <View style={StyleSheet.absoluteFill}>
-        <MeshGradient palette={TONES.informative} veil="ambient" drift={200} />
+        <MeshGradient palette={paletteOf('informative')} veil="ambient" drift={200} speed={speed} />
       </View>
 
       <View style={styles.header}>
@@ -117,10 +120,15 @@ export function FeedScreen({
           <Text style={styles.title}>Inbox</Text>
         </View>
         <View style={styles.headerRight}>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => setTweaksOpen(true)} style={styles.iconButton} hitSlop={6}>
+              <Text style={styles.iconText}>✦</Text>
+            </Pressable>
+            <Pressable onPress={onSignOut} hitSlop={8}>
+              <Text style={styles.signOut}>Sign out</Text>
+            </Pressable>
+          </View>
           <Text style={styles.count}>{cards.length} summaries</Text>
-          <Pressable onPress={onSignOut} hitSlop={8}>
-            <Text style={styles.signOut}>Sign out</Text>
-          </Pressable>
         </View>
       </View>
 
@@ -157,6 +165,8 @@ export function FeedScreen({
         playback={playback}
         onClose={() => setOpenCard(null)}
       />
+
+      <TweaksSheet visible={tweaksOpen} onClose={() => setTweaksOpen(false)} />
     </View>
   );
 }
@@ -180,6 +190,18 @@ const styles = StyleSheet.create({
   },
   title: { color: '#fff', fontFamily: fonts.semibold, fontSize: 30, letterSpacing: -0.6 },
   headerRight: { alignItems: 'flex-end', gap: 6, paddingBottom: 4 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconText: { color: '#fff', fontSize: 13 },
   count: { color: 'rgba(255,255,255,0.5)', fontFamily: fonts.medium, fontSize: 13 },
   signOut: { color: 'rgba(255,255,255,0.35)', fontFamily: fonts.semibold, fontSize: 12 },
   list: { paddingHorizontal: 14, paddingBottom: 28 },

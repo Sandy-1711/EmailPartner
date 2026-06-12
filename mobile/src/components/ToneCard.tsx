@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Tilt } from '../hooks/useTilt';
 import { EmailCard, phraseOf, senderOf, summaryOf } from '../lib/api';
 import { fonts } from '../theme';
-import { paletteFor } from '../tones';
+import { useTweaks } from '../tweaks';
 import { MeshGradient } from './MeshGradient';
 
 interface Props {
@@ -45,15 +45,17 @@ export function ToneDot({ color }: { color: string }) {
 }
 
 export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }: Props) {
-  const palette = paletteFor(card.tone);
+  const { palette: paletteOf, speed, tweaks } = useTweaks();
+  const palette = paletteOf(card.tone);
   const busy = card.processing_status === 'pending' || card.processing_status === 'processing';
   const failed = card.processing_status === 'failed';
+  const compact = tweaks.density === 'compact';
 
   return (
     <Pressable onPress={() => !busy && onOpen(card)} style={styles.card}>
-      <MeshGradient palette={palette} tilt={tilt} veil="card" />
+      <MeshGradient palette={palette} tilt={tilt} veil="card" speed={speed} />
 
-      <View style={styles.content}>
+      <View style={[styles.content, compact && { paddingVertical: 12 }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
             <ToneDot color={palette.dot} />
@@ -64,7 +66,13 @@ export function EchoCard({ card, tilt, playing, onTogglePlay, onOpen, onRetry }:
           <Text style={styles.time}>{timeOf(card.received_at)}</Text>
         </View>
 
-        <Text style={styles.phrase}>
+        <Text
+          style={[
+            styles.phrase,
+            { fontSize: 24 * tweaks.fontScale, lineHeight: 26 * tweaks.fontScale },
+            compact && { marginBottom: 10 },
+          ]}
+        >
           {busy
             ? card.processing_status === 'processing'
               ? 'Summarizing…'

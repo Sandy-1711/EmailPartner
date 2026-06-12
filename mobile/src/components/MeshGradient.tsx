@@ -35,21 +35,33 @@ const BLOBS: BlobSpec[] = [
   { top: '30%', left: '40%', w: '88%', h: '86%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
 ];
 
-function Blob({ color, spec, drift }: { color: string; spec: BlobSpec; drift: number }) {
+function Blob({
+  color,
+  spec,
+  drift,
+  speed,
+}: {
+  color: string;
+  spec: BlobSpec;
+  drift: number;
+  speed: number;
+}) {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (speed <= 0) return; // motion "off"
+    const duration = (spec.dur * 1000) / speed;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(progress, {
           toValue: 1,
-          duration: spec.dur * 1000,
+          duration,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(progress, {
           toValue: 0,
-          duration: spec.dur * 1000,
+          duration,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -61,7 +73,7 @@ function Blob({ color, spec, drift }: { color: string; spec: BlobSpec; drift: nu
       clearTimeout(timer);
       loop.stop();
     };
-  }, [progress, spec]);
+  }, [progress, spec, speed]);
 
   const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, spec.dx * drift] });
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, spec.dy * drift] });
@@ -103,10 +115,12 @@ interface Props {
   drift?: number;
   /** veil strength: cards want strong, ambient backgrounds want soft */
   veil?: 'card' | 'ambient' | 'none';
+  /** motion speed multiplier; 0 = static */
+  speed?: number;
   style?: object;
 }
 
-export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', style }: Props) {
+export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', speed = 1, style }: Props) {
   const parallax = tilt
     ? [
         {
@@ -122,7 +136,13 @@ export function MeshGradient({ palette, tilt, drift = 110, veil = 'card', style 
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, overflow: 'hidden' }, style]}>
       <Animated.View style={[styles.field, { transform: parallax }]}>
         {BLOBS.map((spec, i) => (
-          <Blob key={i} color={palette.blobs[i % palette.blobs.length]} spec={spec} drift={drift} />
+          <Blob
+            key={i}
+            color={palette.blobs[i % palette.blobs.length]}
+            spec={spec}
+            drift={drift}
+            speed={speed}
+          />
         ))}
       </Animated.View>
       {veil !== 'none' && (

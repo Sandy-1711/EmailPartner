@@ -14,6 +14,7 @@ import { clearToken, getToken, setToken } from './src/lib/config';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { SignInScreen } from './src/screens/SignInScreen';
 import { colors } from './src/theme';
+import { TweaksProvider } from './src/tweaks';
 
 type AuthState = 'loading' | 'signedOut' | 'signedIn';
 
@@ -59,6 +60,7 @@ export default function App() {
   }, []);
 
   return (
+    <TweaksProvider>
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="light" />
       {auth === 'loading' || !fontsLoaded ? (
@@ -77,5 +79,6 @@ export default function App() {
         />
       )}
     </View>
+    </TweaksProvider>
   );
 }
