@@ -1,0 +1,21 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'expo.modules.narration'
+version = '1.0.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "expo.modules.narration"
+}
+
+dependencies {
+  // keep in lockstep with expo-audio's androidx.media3 version
+  implementation "androidx.media3:media3-session:1.9.0"
+  implementation "androidx.media3:media3-exoplayer:1.9.0"
+}

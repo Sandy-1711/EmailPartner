@@ -7,6 +7,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { EmailCard, phraseOf, senderOf } from '../lib/api';
+import { Narration } from '../lib/narration';
 
 export interface Playback {
   playingId: string | null;
@@ -90,6 +91,7 @@ export function usePlayback(): Playback {
         playerRef.current?.clearLockScreenControls();
       } catch {}
       playerRef.current?.remove();
+      Narration.stop(); // never overlap with widget-initiated playback
       setIsAudioActiveAsync(true).catch(() => {}); // widget stop may have disabled audio
 
       // use the preloaded (already buffering) player when available
