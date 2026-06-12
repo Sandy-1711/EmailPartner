@@ -1,6 +1,6 @@
 import { Pause, Play } from 'lucide-react-native';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts } from '../theme';
 import type { TonePalette } from '../tones';
@@ -34,61 +34,6 @@ function fmt(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-/**
- * Six staggered pulse values; every bar is permanently attached to one
- * (transform identity never changes — swapping or removing native-driven
- * transforms crashes Fabric's diffing). Loops run only while playing; on
- * stop, values ease back to 1. Varied durations keep it organic, not
- * uniform.
- */
-const PULSE_COUNT = 6;
-
-function usePulse(playing: boolean): Animated.Value[] {
-  const values = useRef(
-    Array.from({ length: PULSE_COUNT }, () => new Animated.Value(1))
-  ).current;
-  useEffect(() => {
-    if (!playing) {
-      values.forEach((v) =>
-        Animated.timing(v, {
-          toValue: 1,
-          duration: 180,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start()
-      );
-      return;
-    }
-    const loops = values.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(v, {
-            toValue: 1.45 - (i % 3) * 0.12,
-            duration: 220 + i * 55,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(v, {
-            toValue: 0.66 + (i % 4) * 0.07,
-            duration: 260 + ((i * 97) % 140),
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(v, {
-            toValue: 1,
-            duration: 200 + (i % 2) * 90,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ])
-      )
-    );
-    loops.forEach((l, i) => setTimeout(() => l.start(), i * 60));
-    return () => loops.forEach((l) => l.stop());
-  }, [playing, values]);
-  return values;
 }
 
 interface Props {
@@ -125,7 +70,6 @@ export function WavePlayer({
   const barsWidth = useRef(0);
   const barsPageX = useRef(0);
   const barsRef = useRef<View | null>(null);
-  const pulse = usePulse(playing);
   // While scrubbing, the waveform follows the finger via local state only;
   // the actual seek fires once on release.
   const [scrub, setScrub] = useState<number | null>(null);
@@ -192,7 +136,7 @@ export function WavePlayer({
             {wave.map((v, i) => {
               const filled = i / wave.length <= shown;
               return (
-                <Animated.View
+                <View
                   key={i}
                   style={{
                     flex: 1,
@@ -200,8 +144,6 @@ export function WavePlayer({
                     minWidth: 2,
                     borderRadius: 4,
                     backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
-                    // node identity is constant for the bar's lifetime
-                    transform: [{ scaleY: pulse[i % PULSE_COUNT] }],
                   }}
                 />
               );
