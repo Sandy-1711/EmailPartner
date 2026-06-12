@@ -36,39 +36,56 @@ function fmt(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** Staggered pulse shared across bars — 4 animated values, bars cycle them. */
+/**
+ * Six staggered pulse values; every bar is permanently attached to one
+ * (transform identity never changes — swapping or removing native-driven
+ * transforms crashes Fabric's diffing). Loops run only while playing; on
+ * stop, values ease back to 1. Varied durations keep it organic, not
+ * uniform.
+ */
+const PULSE_COUNT = 6;
+
 function usePulse(playing: boolean): Animated.Value[] {
-  const values = useRef([0, 1, 2, 3].map(() => new Animated.Value(1))).current;
+  const values = useRef(
+    Array.from({ length: PULSE_COUNT }, () => new Animated.Value(1))
+  ).current;
   useEffect(() => {
     if (!playing) {
-      values.forEach((v) => v.setValue(1));
+      values.forEach((v) =>
+        Animated.timing(v, {
+          toValue: 1,
+          duration: 180,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start()
+      );
       return;
     }
     const loops = values.map((v, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.timing(v, {
-            toValue: 1.35,
-            duration: 260 + i * 70,
+            toValue: 1.45 - (i % 3) * 0.12,
+            duration: 220 + i * 55,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
           Animated.timing(v, {
-            toValue: 0.8,
-            duration: 260 + i * 70,
+            toValue: 0.66 + (i % 4) * 0.07,
+            duration: 260 + ((i * 97) % 140),
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
           Animated.timing(v, {
             toValue: 1,
-            duration: 200,
+            duration: 200 + (i % 2) * 90,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
         ])
       )
     );
-    loops.forEach((l) => l.start());
+    loops.forEach((l, i) => setTimeout(() => l.start(), i * 60));
     return () => loops.forEach((l) => l.stop());
   }, [playing, values]);
   return values;
@@ -109,8 +126,6 @@ export function WavePlayer({
   const barsPageX = useRef(0);
   const barsRef = useRef<View | null>(null);
   const pulse = usePulse(playing);
-  // never swap transform to undefined — Animated crashes diffing it away
-  const still = useRef(new Animated.Value(1)).current;
   // While scrubbing, the waveform follows the finger via local state only;
   // the actual seek fires once on release.
   const [scrub, setScrub] = useState<number | null>(null);
@@ -173,22 +188,25 @@ export function WavePlayer({
           }}
           onResponderTerminate={() => setScrub(null)}
         >
-          {wave.map((v, i) => {
-            const filled = i / wave.length <= shown;
-            return (
-              <Animated.View
-                key={i}
-                style={{
-                  flex: 1,
-                  height: `${v * 100}%`,
-                  minWidth: 2,
-                  borderRadius: 4,
-                  backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
-                  transform: [{ scaleY: playing && filled ? pulse[i % pulse.length] : still }],
-                }}
-              />
-            );
-          })}
+          <View style={styles.barsInner}>
+            {wave.map((v, i) => {
+              const filled = i / wave.length <= shown;
+              return (
+                <Animated.View
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${v * 100}%`,
+                    minWidth: 2,
+                    borderRadius: 4,
+                    backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
+                    // node identity is constant for the bar's lifetime
+                    transform: [{ scaleY: pulse[i % PULSE_COUNT] }],
+                  }}
+                />
+              );
+            })}
+          </View>
           {scrub != null && (
             <View
               pointerEvents="none"
@@ -226,7 +244,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
   },
-  bars: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2.5 },
+  bars: { flex: 1 },
+  barsInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2.5,
+    height: '100%',
+  },
   scrubLine: {
     position: 'absolute',
     top: -6,
