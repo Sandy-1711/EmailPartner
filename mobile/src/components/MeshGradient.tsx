@@ -80,10 +80,14 @@ function Blob({ color, spec, drift }: { color: string; spec: BlobSpec; drift: nu
     >
       <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
         <Defs>
+          {/* gaussian-like falloff — reads as blurred glow, not a circle */}
           <RadialGradient id="g" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={color} stopOpacity={0.9} />
-            <Stop offset="32%" stopColor={color} stopOpacity={0.8} />
-            <Stop offset="70%" stopColor={color} stopOpacity={0} />
+            <Stop offset="0%" stopColor={color} stopOpacity={0.72} />
+            <Stop offset="22%" stopColor={color} stopOpacity={0.6} />
+            <Stop offset="42%" stopColor={color} stopOpacity={0.38} />
+            <Stop offset="62%" stopColor={color} stopOpacity={0.18} />
+            <Stop offset="82%" stopColor={color} stopOpacity={0.05} />
+            <Stop offset="100%" stopColor={color} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Ellipse cx="50" cy="50" rx="50" ry="50" fill="url(#g)" />
