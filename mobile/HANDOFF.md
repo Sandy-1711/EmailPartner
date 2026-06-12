@@ -1,62 +1,39 @@
-# Mobile app handoff — pick up from here
+# Echo Mail (EmailPartner mobile) — handoff
 
-State as of 2026-06-10 (evening). Backend is **feature-complete and tested**; the Expo app is **written, type-checks clean, and the debug APK builds successfully** — what's left is running it on an emulator/device.
+State as of 2026-06-12. Backend feature-complete + tested; the Expo app implements the **Echo Mail design** (Claude Design handoff bundle) end-to-end and builds; remaining work is verification + the "make it real" steps below.
 
-## What exists and works (all committed on `master`)
+## What's DONE
 
-### Backend (FastAPI, runs fine)
-- Full pipeline: Gmail watch → Pub/Sub webhook → durable Mongo-backed queue (`app/services/queue/worker.py`) → Gemini summary + illustration + **TTS narration** (WAV at `card_audio_url`).
-- Web frontend at `/` (`app/static/index.html`): live polling feed, works in browser.
-- **Mobile support, already done:**
-  - `Authorization: Bearer <session-token>` accepted everywhere via `get_session_user_id` in `app/dependencies.py`.
-  - `GET /v1/auth/google/start?client=mobile` → OAuth state carries the flag → callback 303-redirects to `emailpartner://auth?token=<session-token>` instead of setting a cookie (`app/routers/v1/auth/controller.py`).
-- Tests: `python -m pytest tests` (21 passing, in-memory DB fake, no Mongo needed).
+### Backend (FastAPI + Mongo, 21 tests green: `python -m pytest tests`)
+- Gmail watch → Pub/Sub webhook → durable Mongo-claim queue (`app/services/queue/worker.py`, survives restarts via lease sweep) → Gemini summary + illustration + TTS narration (WAV).
+- Cards API: phrase + tone persisted (`card_phrase`/`card_tone`), `GET /v1/cards/{id}` returns the full body, session cookie **or** `Authorization: Bearer` auth.
+- Mobile OAuth: `GET /v1/auth/google/start?client=mobile` → callback 303s to `emailpartner://auth?token=…`.
+- Web frontend at `/` (older glassmorphism design — NOT yet updated to Echo Mail).
 
-### Expo app in `mobile/` (written, type-checked, NOT yet built/run)
-- Expo SDK 56, RN 0.85, TypeScript. Deps installed: `react-native-android-widget@0.20.3`, `expo-audio`, `expo-web-browser`, `expo-linking`, `expo-secure-store`.
-- `app.config.ts` (app.json was deleted): name EmailPartner, `scheme: 'emailpartner'`, `android.package: 'com.emailpartner.app'`, widget plugin config (widget `name: 'EmailCard'`, 4x2 cells, resizable, 30-min `updatePeriodMillis`).
-- `src/lib/config.ts` — SecureStore: server URL (default `http://10.0.2.2:8000` for emulator) + session token.
-- `src/lib/api.ts` — fetch wrapper adding Bearer header; `getMe/getCards/retryCard/getSignInUrl`; card text helpers (`headlineOf/summaryOf/senderOf` — `text` is `"headline\n\nsummary"`).
-- `App.tsx` — auth state machine; deep links: `emailpartner://auth?token=…` (sign-in) and `emailpartner://play/<cardId>` (widget tap → auto-play narration in feed).
-- `src/screens/SignInScreen.tsx` — server URL input + `WebBrowser.openAuthSessionAsync(authUrl, 'emailpartner://auth')`, token parsed with `Linking.parse` (NOT `new URL` — Hermes).
-- `src/screens/FeedScreen.tsx` — 4s polling feed of `GlassCard`s; audio via `expo-audio` `createAudioPlayer({uri})` (one player at a time, `didJustFinish` clears state); calls `refreshWidget(cards)` after every fetch.
-- `src/widget/CardWidget.tsx` — RemoteViews widget: latest ready card's art (`ImageWidget`, network URL cast to `` `https:${string}` ``) under a frosted glass `FlexWidget` panel (headline, sender, "▶ listen"); whole thing `OPEN_URI` → `emailpartner://play/<id>`; empty/signed-out fallback panel with `OPEN_APP`.
-- `src/widget/widget-task-handler.tsx` — handles WIDGET_ADDED/UPDATE/RESIZED by fetching cards (Bearer token from SecureStore) and rendering.
-- `index.ts` — `registerRootComponent(App)` + `registerWidgetTaskHandler(widgetTaskHandler)`.
-- `mobile/.gitignore` ignores `/android` and `/ios` (CNG — native dirs are generated).
+### Mobile app (`mobile/`, Expo SDK 56, TypeScript, tsc-clean)
+**Design = "Echo Mail"** from the Claude Design bundle (tokens in the repo now; original bundle: claude.ai/design "Email Widget Dashboard" project):
+- `src/tones.ts` — indigo/violet/blue tone palettes (urgent→magenta, social→teal, informative/transactional→indigo, promotional→violet). Never orange, no glassmorphism.
+- `src/components/MeshGradient.tsx` — the moving 4-blob mesh: SVG radial gradients + the design's meshA–D drift keyframes + accelerometer tilt parallax (`useTilt`, gravity-based — DeviceMotion.rotation is null on many phones).
+- `src/components/WavePlayer.tsx` — deterministic 44-bar waveform per email id, accent play circle, fills with real playback progress.
+- Screens: Inbox (ambient mesh, tone cards with phrase hero + play-pill), Detail (full-screen mesh, hero player, "The gist", expandable full email), Sign-in. Space Grotesk throughout (`@expo-google-fonts/space-grotesk`).
+- `src/hooks/usePlayback.ts` — single app-wide player; **lock-screen media controls** via expo-audio's MediaSession (`setActiveForLockScreen`: phrase=title, sender=artist; audio mode `doNotMix` + `shouldPlayInBackground` — both required). Active card toggles pause/resume; UI syncs when paused from the notification.
+- Widget (`src/widget/CardWidget.tsx`): Echo Mail style — tone gradient, glowing dot + label, phrase, static mini waveform; Listen deep-links `emailpartner://play/<id>`, card body `emailpartner://read/<id>` (opens Detail).
 
-## What remains (in order)
+### Widget dependency verdict (`react-native-android-widget@0.20.3`)
+The library renders the widget tree to a **bitmap** shown in an ImageView with `scaleType="matrix"` (no scaling, top-left anchored; see `RNWidget.java` / `rn_widget.xml`). Bitmap size comes from the launcher's `getAppWidgetOptions` *estimate* — when launchers over-report (common on OEM launchers), the bitmap clips at the **bottom/right**. That was the user's cutoff. Mitigation shipped: a transparent 6dp safety inset around the card absorbs clipping. The lib is otherwise sound; if cutoff persists, increase the inset or re-render on `WIDGET_RESIZED` (already handled).
 
-1. **Build the Android app — ✅ DONE 2026-06-10.** `expo prebuild` + `gradlew assembleDebug` both succeeded; APK at `mobile/android/app/build/outputs/apk/debug/app-debug.apk` (137 MB, debug).
-   Environment fixes that made it work (already applied to this machine):
-   - System `JAVA_HOME` points at a nonexistent `C:\Program Files\Java\jdk-19` — **always build with** `JAVA_HOME="C:\Program Files\Microsoft\jdk-17.0.10.7-hotspot" ./gradlew assembleDebug`.
-   - SDK's `ndk/27.1.12297006` was a corrupt 1 KB husk → deleted; AGP auto-reinstalled it properly during the build.
-   - AVD **`ep_test`** (android-31 google_apis x86_64) was created manually (legacy avdmanager breaks on JDK 17; its two INI files were written by hand in `~/.android/avd/`). Boot with:
-     `%LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe -avd ep_test -no-snapshot -gpu swiftshader_indirect`
-   - Debug manifest already has `usesCleartextTraffic=true`, so plain `http://10.0.2.2:8000` works on the emulator in debug builds.
+## What REMAINS
 
-2. **NEXT STEP — smoke test on emulator/device (nothing run yet):**
-   - Boot `ep_test` (command above), wait for `adb shell getprop sys.boot_completed` = 1, then `adb install mobile/android/app/build/outputs/apk/debug/app-debug.apk` and launch `com.emailpartner.app`.
-   - Verify: sign-in screen renders → deep link `adb shell am start -a android.intent.action.VIEW -d "emailpartner://auth?token=test"` flips to feed → widget appears in launcher picker.
-
-3. **End-to-end test (needs backend):**
-   - Backend up: `uvicorn app.main:app` + MongoDB (not installed on this machine — Docker Desktop exists but wasn't running) + ngrok for real Gmail pushes.
-   - Emulator reaches host via `http://10.0.2.2:8000` (the app default). Real phone needs the ngrok HTTPS URL typed into the sign-in screen.
-   - Sign in → browser → Google → should bounce back into the app with token. Feed should show cards; play button streams WAV.
-   - Add the widget from the launcher's widget picker ("EmailPartner") → shows latest card art + glass panel → tap → app opens and narrates.
-
-4. **Known risks / things not yet verified:**
-   - `expo-audio` API names (`createAudioPlayer`, `setAudioModeAsync`, `playbackStatusUpdate`, `status.didJustFinish`) — verify against SDK 56 docs (https://docs.expo.dev/versions/v56.0.0/sdk/audio/) if playback misbehaves; tsc passed so shapes exist.
-   - Widget headless fetch: SecureStore + fetch inside `widgetTaskHandler` should work (runs in app process) but is unverified.
-   - `ImageWidget` with network image needs INTERNET perm (Expo adds it by default).
-   - Gmail OAuth refresh tokens expire after 7 days while the Google OAuth consent screen is in Testing mode — re-sign-in, or publish the app in Google Cloud console.
-   - The user's existing Gmail account row had a dead refresh token (invalid_grant in renewal loop) — re-sign-in fixes; optional hardening: mark account on invalid_grant instead of hourly retry-spam (discussed, not built).
-
-5. **Planned enhancement — local model support:** user wants to run summarization/TTS against local models eventually. The seam already exists: `LLMProvider` ABC (`app/infrastructure/llm/providers/base.py`) + `build_llm_provider(provider=...)` factory. Plan: add an OpenAI-compatible provider (works with Ollama/LM Studio/llama.cpp servers) selected via `LLM_PROVIDER` + `LLM_BASE_URL` env vars; structured output via JSON mode + pydantic validation; TTS stays on Gemini (or goes optional) since local TTS is a separate problem.
-
-6. **Nice-to-haves discussed, not started:** GCS blob storage, SSE instead of polling (web), narration playback directly from widget without opening the app (needs foreground service), invalid_grant hardening in the watch renewal loop. (README mobile section: done.)
+1. **Verify the Echo Mail build** — a fresh APK build was the last step (new native deps: react-native-svg, expo-font). `mobile/android/app/build/outputs/apk/debug/app-debug.apk`; install on emulator `ep_test` or the phone, check: mesh motion, fonts, detail screen, widget render, lock-screen notification during playback (lock the phone while narration plays).
+   - Build env quirks (already solved, don't rediscover): `JAVA_HOME="C:\Program Files\Microsoft\jdk-17.0.10.7-hotspot"` (system JAVA_HOME is broken); AVD `ep_test` exists (created by hand-writing INI files — avdmanager breaks on JDK 17).
+   - Testing without the real backend: `C:\Users\sandy\AppData\Local\Temp\mock_ep.py` (mock API on :8000 incl. fake instant sign-in). Phone via USB: `adb reverse tcp:8081 tcp:8081` (Metro) + `tcp:8000 tcp:8000` (mock), server URL `http://localhost:8000`. Debug APK needs Metro running (`npx expo start`).
+2. **Run against the real backend** — Mongo + `uvicorn app.main:app` + ngrok + real Google sign-in; real TTS narration replaces the fake.wav (which makes play stop after ~5s).
+3. **Release APK** (standalone, no Metro): `cd mobile/android && gradlew assembleRelease` with the JAVA_HOME above.
+4. **Local model support** (user wants this eventually): add an OpenAI-compatible `LLMProvider` (Ollama/LM Studio) behind `LLM_PROVIDER`/`LLM_BASE_URL` env vars; the ABC + factory seam already exists in `app/infrastructure/llm/`.
+5. **Web frontend** still has the pre-Echo-Mail design; port phrase/tone/mesh look if one design language is wanted.
+6. Smaller: test for `GET /v1/cards/{id}`; invalid_grant hardening in the watch renewal loop; GCS storage; SSE.
 
 ## Conventions
-- Granular conventional commits (`feat(mobile): …`), NO Co-Authored-By trailer.
-- Backend tests must stay green: `python -m pytest tests`.
-- Don't commit `mobile/android/` — it's generated by prebuild.
+- Granular conventional commits DURING work (user has insisted repeatedly), no Co-Authored-By trailer.
+- Backend tests must stay green; `npx tsc --noEmit` in mobile/ before committing UI work.
+- `mobile/android/` is generated (`expo prebuild`) and gitignored — never commit it.
