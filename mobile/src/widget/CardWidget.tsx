@@ -1,13 +1,14 @@
 import React from 'react';
 import {
   FlexWidget,
-  ImageWidget,
   OverlapWidget,
+  SvgWidget,
   TextWidget,
 } from 'react-native-android-widget';
 
 import { makeWave } from '../components/WavePlayer';
 import { paletteFor } from '../tones';
+import { meshSvg } from './meshSvg';
 
 export interface WidgetCard {
   id: string;
@@ -18,25 +19,13 @@ export interface WidgetCard {
   audioUrl: string | null;
 }
 
-// Pre-rendered mesh backgrounds (assets/mesh/, generated to match tones.ts).
-const MESH_BG: Record<string, number> = {
-  urgent: require('../../assets/mesh/widget-urgent.png'),
-  social: require('../../assets/mesh/widget-social.png'),
-  informative: require('../../assets/mesh/widget-informative.png'),
-  transactional: require('../../assets/mesh/widget-transactional.png'),
-  promotional: require('../../assets/mesh/widget-promotional.png'),
-};
-
-const MESH_W = 320;
-const MESH_H = 150;
-
 /**
  * Echo Mail home-screen widget, layered for resilience: a gradient base
- * that can't fail, the mesh bitmap above it as enhancement (debug builds
- * load it via Metro — if that fails only the texture is lost, never the
- * card), and content on top. Play/stop runs in the native NarrationService
- * (the app never opens); the click handler re-renders instantly from the
- * click payload.
+ * that can't fail, the mesh texture above it as an inline SVG string
+ * (rendered natively by AndroidSVG — no Metro, so it shows in debug AND
+ * release, unlike the old require()'d PNGs), and content on top. Play/stop
+ * runs in the native NarrationService (the app never opens); the click
+ * handler re-renders instantly from the click payload.
  */
 export function CardWidget({
   card,
@@ -50,7 +39,6 @@ export function CardWidget({
   const palette = paletteFor(card?.tone);
   const wave = card ? makeWave(card.id, 16) : [];
   const playing = card != null && playingId === card.id;
-  const mesh = MESH_BG[card?.tone ?? 'informative'] ?? MESH_BG.informative;
 
   return (
     <FlexWidget
@@ -74,8 +62,11 @@ export function CardWidget({
             },
           }}
         />
-        {/* enhancement: the real mesh texture */}
-        <ImageWidget image={mesh} imageWidth={MESH_W} imageHeight={MESH_H} radius={24} />
+        {/* enhancement: the mesh texture, drawn natively from an SVG string */}
+        <SvgWidget
+          svg={meshSvg(palette)}
+          style={{ width: 'match_parent', height: 'match_parent' }}
+        />
         {/* content */}
         <FlexWidget
           clickAction={card ? 'OPEN_URI' : 'OPEN_APP'}
