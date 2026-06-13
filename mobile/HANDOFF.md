@@ -1,18 +1,24 @@
 # Echo Mail (EmailPartner mobile) — handoff
 
-State as of 2026-06-12 (night). Backend feature-complete + tested. App implements the Echo Mail design; **audio now works app + widget via the native NarrationService** (user-confirmed). Two known bugs remain (next section). The user is frustrated with the iteration count — next session: fix precisely, verify on-device BEFORE claiming done, no scattershot changes.
+State as of 2026-06-13. Backend feature-complete + tested. App implements the Echo Mail design; **audio now works app + widget via the native NarrationService** (user-confirmed). The two open bugs now have fixes shipped (pushed to master) but **NOT yet verified on-device** — verify these first next session. The user is frustrated with the iteration count — fix precisely, verify on-device BEFORE claiming done, no scattershot changes.
 
-## OPEN BUGS — fix these first (diagnosed, not yet fixed)
+## FIXES SHIPPED 2026-06-13 — verify on-device first (pushed, unverified)
 
-1. **Widget shows the previous (flat gradient) background instead of the mesh texture.**
-   Diagnosis: the layered CardWidget renders gradient base + mesh ImageWidget on top. In DEBUG builds, `require()`d images resolve through Metro; when that load fails inside the native bitmap render, only the gradient base shows — which IS the "previous background". So the mesh asset is still failing to load through Metro in the widget's headless render path (it worked once at ~19:50 when Metro was freshly up).
-   Fix options (pick one, verify on device):
-   a. Ship mesh PNGs as native Android drawables instead of Metro assets: copy `assets/mesh/widget-*.png` into `mobile/android/app/src/main/res/drawable-nodpi/` via a tiny expo config plugin (CNG-safe) or into the narration module's `android/src/main/res/`, and reference by resource name (ImageWidget accepts `android.resource://` URIs? check lib docs) — bulletproof in debug AND release.
-   b. Just build RELEASE (`gradlew assembleRelease`) where assets are bundled — debug-only problem disappears; document the debug limitation.
+1. **Widget mesh background (was: flat gradient instead of mesh).**
+   Root cause confirmed: the mesh `ImageWidget` loaded a `require()`d PNG through Metro; in the widget's headless bitmap pass with Metro not serving (debug), the load failed and only the gradient base showed.
+   Fix shipped (commit d155b3c): replaced the PNG `ImageWidget` with an inline `SvgWidget` string — `src/widget/meshSvg.ts` builds the 4-blob mesh + veil as an SVG string from the tone palette; `SvgWidget` draws it natively via AndroidSVG (`renderToPicture`), so it never touches Metro and renders identically in debug AND release. Gradient base stays underneath as the can't-fail layer; old `assets/mesh/widget-*.png` now unused (can delete later).
+   Verify: mesh texture visible on the widget in a debug build with Metro down; check it fills (SvgWidget uses a plain ImageView, default FIT_CENTER — if it letterboxes oddly on some widget aspect ratios, the gradient base fills the gaps, but confirm it looks right).
 
-2. **After audio ends naturally, the widget icon takes long to flip back to play.**
-   Diagnosis: the service's `notifyWidget()` broadcast fires immediately on STATE_ENDED, BUT the WIDGET_UPDATE path in `widget-task-handler.tsx` awaits `fetchWidgetCard()` (an HTTP request through adb-reverse + debug JS) before rendering. The icon waits on the network.
-   Fix: cache the last rendered WidgetCard (module/global var set by every render path, or SecureStore) and in WIDGET_UPDATE render IMMEDIATELY from cache with fresh `Narration.currentId()`, then fetch and re-render only if data changed (same pattern as the click path, which is instant).
+2. **Widget play/stop icon lag after audio ends naturally.**
+   Root cause confirmed: `notifyWidget()` broadcasts WIDGET_UPDATE on STATE_ENDED, but the handler awaited `fetchWidgetCard()` (HTTP) before rendering, so the icon lagged the audio.
+   Fix shipped (commit d82c1d0): `src/widget/cache.ts` persists the last rendered snapshot in SecureStore (module globals die with the headless JS context). WIDGET_UPDATE now renders IMMEDIATELY from cache with a fresh `Narration.currentId()`, then refetches and re-renders only if data changed. The click path writes the snapshot too (warm cache).
+   Verify: play narration from the widget, let it finish — icon should flip to ▶ instantly, not after a delay.
+
+## NEXT SESSION — agreed dependencies to add (in-app only, NOT the widget)
+
+Decided 2026-06-13. **The widget itself needs neither** — a home-screen widget is a one-shot bitmap/RemoteViews handed to the launcher, not a live RN surface, so Skia/Reanimated have nothing to attach to there. The widget is already maximally native (AndroidSVG draws the mesh, ExoPlayer plays audio). These two are for the IN-APP screens:
+- **react-native-skia** — redraw the in-app `MeshGradient` on a real Skia canvas with TRUE gaussian blur (currently faked with layered react-native-svg radial stops) and its own off-JS-thread render loop. Win is visual quality (real blur), not thread offload — the current mesh already animates via `Animated` `useNativeDriver: true`.
+- **react-native-reanimated** — move the hero-waveform scrub gesture to the UI thread (currently JS-thread `pageX` handling). Add only if the scrub feels laggy on a release build.
 
 ## What is VERIFIED WORKING on the user's phone (don't break it)
 - Audio from app AND widget via native NarrationService (single ExoPlayer, foreground MediaSessionService, media3 1.9). Play, stop, no app-kill (startForeground called synchronously in onStartCommand — keep this).
