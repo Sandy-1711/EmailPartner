@@ -1,7 +1,6 @@
 package expo.modules.echowidget
 
 import android.app.Activity
-import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
@@ -39,15 +38,17 @@ class EchoWidgetActivity : Activity() {
       putExtra("title", intent.getStringExtra(EchoWidgetProvider.EXTRA_TITLE))
       putExtra("artist", intent.getStringExtra(EchoWidgetProvider.EXTRA_ARTIST))
     }
+    // Only start the service and finish. Do NOT touch AppWidgetManager here —
+    // notifyAppWidgetViewDataChanged binds the collection service to this
+    // activity, which then finishes and leaks/tears down the connection,
+    // killing the StackView adapter (that was the widget "crash"). The play
+    // icon refreshes from NarrationService (a long-lived service context).
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         startForegroundService(service)
       } else {
         startService(service)
       }
-      // optimistic flip; NarrationService also persists + refreshes
-      WidgetStore.writePlayingId(this, if (isPlaying) null else id)
-      refreshWidget()
     } catch (_: Exception) {
     }
   }
@@ -62,12 +63,6 @@ class EchoWidgetActivity : Activity() {
       )
     } catch (_: Exception) {
     }
-  }
-
-  private fun refreshWidget() {
-    val mgr = AppWidgetManager.getInstance(this)
-    val ids = mgr.getAppWidgetIds(ComponentName(this, EchoWidgetProvider::class.java))
-    if (ids.isNotEmpty()) mgr.notifyAppWidgetViewDataChanged(ids, R.id.echo_stack)
   }
 
   companion object {

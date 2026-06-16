@@ -77,6 +77,7 @@ class NarrationService : MediaSessionService() {
         // widget taps start us directly (no JS), so adopt the id from the intent
         intent.getStringExtra(EXTRA_ID)?.let { currentId = it }
         persistPlayingId()
+        notifyWidget() // flip the widget's play icon from the service context
         val url = intent.getStringExtra(EXTRA_URL)
         val player = mediaSession?.player
         if (url != null && player != null) {

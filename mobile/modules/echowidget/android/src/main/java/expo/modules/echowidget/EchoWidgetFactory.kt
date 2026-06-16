@@ -19,10 +19,13 @@ class EchoWidgetFactory(
 
   private var cards: List<WidgetCard> = emptyList()
 
-  // Mesh is rendered at the widget's actual aspect so fitXY doesn't stretch it
-  // (that was distorting the rounded corners). Recomputed on resize.
-  private var meshW = 460
-  private var meshH = 220
+  // Mesh aspect matches the widget (so fitXY doesn't stretch the rounded
+  // corners), but kept SMALL on purpose: a RemoteViews item must fit in a
+  // ~1MB Binder transaction, and the soft mesh upscales fine. 420x180 ARGB is
+  // ~300KB; going large (600x360 ~864KB) overran the transaction and the host
+  // dropped the whole widget on the play-tap rebuild.
+  private var meshW = 400
+  private var meshH = 180
 
   override fun onCreate() {
     computeMeshSize()
@@ -35,13 +38,11 @@ class EchoWidgetFactory(
 
   private fun computeMeshSize() {
     val opts = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId)
-    val density = context.resources.displayMetrics.density
     val wDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
     val hDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-    if (wDp > 0 && hDp > 0) {
-      meshW = (wDp * density).toInt().coerceIn(240, 600)
-      meshH = (hDp * density).toInt().coerceIn(150, 360)
-    }
+    val aspect = if (wDp > 0 && hDp > 0) wDp.toFloat() / hDp else 2.1f
+    meshH = 180
+    meshW = (meshH * aspect).toInt().coerceIn(240, 420)
   }
 
   override fun onDestroy() {
@@ -56,17 +57,26 @@ class EchoWidgetFactory(
     val playing = card.hasAudio && card.id == WidgetStore.readPlayingId(context)
 
     val rv = RemoteViews(context.packageName, R.layout.echo_widget_item)
-    rv.setImageViewBitmap(R.id.item_mesh, MeshRenderer.mesh(palette, meshW, meshH))
-    rv.setImageViewBitmap(R.id.item_dot, MeshRenderer.dot(palette))
+    // Never let a rendering hiccup break the whole widget — fall back to a
+    // solid tone background if a bitmap can't be drawn/sent.
+    try {
+      rv.setImageViewBitmap(R.id.item_mesh, MeshRenderer.mesh(palette, meshW, meshH))
+      rv.setImageViewBitmap(R.id.item_dot, MeshRenderer.dot(palette))
+    } catch (_: Throwable) {
+      rv.setInt(R.id.item_mesh, "setBackgroundColor", palette.base)
+    }
     rv.setTextViewText(R.id.item_sender, card.sender.uppercase())
     rv.setTextViewText(R.id.item_phrase, card.phrase)
 
     if (card.hasAudio) {
       rv.setViewVisibility(R.id.item_pill, android.view.View.VISIBLE)
       rv.setViewVisibility(R.id.item_wave, android.view.View.VISIBLE)
-      rv.setImageViewBitmap(R.id.item_play_icon, MeshRenderer.playIcon(palette, playing))
+      try {
+        rv.setImageViewBitmap(R.id.item_play_icon, MeshRenderer.playIcon(palette, playing))
+        rv.setImageViewBitmap(R.id.item_wave, MeshRenderer.wave(card.id, playing, palette))
+      } catch (_: Throwable) {
+      }
       rv.setTextViewText(R.id.item_play_label, if (playing) "Playing" else "Listen")
-      rv.setImageViewBitmap(R.id.item_wave, MeshRenderer.wave(card.id, playing, palette))
       rv.setOnClickFillInIntent(R.id.item_pill, playFillIn(card))
     } else {
       rv.setViewVisibility(R.id.item_pill, android.view.View.GONE)
