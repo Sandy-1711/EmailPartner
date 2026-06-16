@@ -64,6 +64,14 @@ class Settings(BaseSettings):
             default_factory=lambda: ["messageAdded"],
         ),
     ]
+    # Backfill flood guard: only process emails received within this many
+    # seconds of now. When the backend comes back online after a gap, Gmail's
+    # history.list (from a stale historyId) returns the whole backlog of
+    # messagesAdded — without this, every one would run the LLM + TTS pipeline
+    # and burn credits. 0 disables the guard (process everything). Default 1h.
+    gmail_max_email_age_seconds: Annotated[
+        int, Field(validation_alias="GMAIL_MAX_EMAIL_AGE_SECONDS", default=3600)
+    ]
     pubsub_verification_token: Annotated[
         SecretStr | None, Field(validation_alias="PUBSUB_VERIFICATION_TOKEN", default=None)
     ]

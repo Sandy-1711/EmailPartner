@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 from httpx import AsyncClient, HTTPStatusError
@@ -113,8 +113,23 @@ class GmailWebhookService:
             for added in item.messages_added:
                 message_ids.append(added.message.id)
 
+        # Backfill flood guard: a stale historyId makes history.list return the
+        # whole backlog. Check each message's date via a cheap metadata fetch and
+        # skip anything older than the cutoff BEFORE downloading the full body or
+        # touching the (LLM + TTS) pipeline. See gmail_max_email_age_seconds.
+        max_age = self._settings.gmail_max_email_age_seconds
+        cutoff = utc_now() - timedelta(seconds=max_age) if max_age > 0 else None
+
         enqueued = 0
+        skipped = 0
         for message_id in message_ids:
+            if cutoff is not None:
+                meta = await gmail_client.get_message(message_id, format="metadata")
+                received = _parse_date(_get_header(meta, "Date"))
+                if received is None or received < cutoff:
+                    skipped += 1
+                    continue
+
             message = await gmail_client.get_message(message_id, format="full")
             subject = _get_header(message, "Subject")
             from_header = _get_header(message, "From")
@@ -138,6 +153,10 @@ class GmailWebhookService:
             _, is_new = await self._email_store.upsert_email(email_record)
             if is_new:
                 enqueued += 1
+        if skipped:
+            logger.info(
+                "Backfill guard skipped %d email(s) older than %ds", skipped, max_age
+            )
         if enqueued:
             self._worker.notify()
 
