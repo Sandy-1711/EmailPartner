@@ -9,6 +9,7 @@ import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { clearToken, getToken, setToken } from './src/lib/config';
 import { FeedScreen } from './src/screens/FeedScreen';
@@ -60,6 +61,7 @@ export default function App() {
   }, []);
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <TweaksProvider>
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="light" />
@@ -80,5 +82,6 @@ export default function App() {
       )}
     </View>
     </TweaksProvider>
+    </GestureHandlerRootView>
   );
 }
