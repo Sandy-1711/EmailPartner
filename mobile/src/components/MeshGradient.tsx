@@ -1,25 +1,43 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import {
+  Blur,
+  Canvas,
+  Circle,
+  Group,
+  LinearGradient,
+  RadialGradient,
+  Rect,
+  vec,
+} from '@shopify/react-native-skia';
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
+import {
+  cancelAnimation,
+  Easing,
+  useDerivedValue,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 
 import type { Tilt } from '../hooks/useTilt';
 import type { TonePalette } from '../tones';
 
 /**
- * Echo Mail mesh gradient: several colored blobs drifting under a blur —
- * not a single linear ramp. Ported from the design's mesh.jsx:
- * blob layout, drift keyframes (meshA–D) and the readability veil.
- * RN can't blur, so each blob is a real SVG radial gradient (soft falloff),
- * which reads the same. `tilt` adds the device-motion parallax on top.
+ * Echo Mail mesh gradient on a real Skia canvas: colored blobs drifting under
+ * a TRUE gaussian blur (a Skia Blur image filter over the whole blob group),
+ * not the layered react-native-svg radial stops that faked the blur before.
+ * Drift + the device-tilt parallax run as reanimated worklets on the UI thread.
+ * Ported layout/keyframes from the design's mesh.jsx (meshA–D, the veil).
  */
 
 interface BlobSpec {
-  top: string;
-  left: string;
-  w: string;
-  /** when set, height is this percentage; otherwise the blob stays circular */
-  h?: string;
+  /** top/left/w as fractions of the oversized field (see FIELD_INSET) */
+  top: number;
+  left: number;
+  w: number;
+  /** ambient blobs are taller; cards stay circular (h omitted) */
+  h?: number;
   dur: number;
   delay: number;
   // drift end-state from the meshA–D keyframes, as fractions of card size
@@ -29,94 +47,82 @@ interface BlobSpec {
   s1: number;
 }
 
-// Cards: blobs sized off the container WIDTH with aspectRatio 1 so they stay
-// circular on wide cards (height-percent sizing flattened them into bands).
+// The field is drawn 28% larger than the view and inset -14% so drift +
+// parallax never pull a blob's soft edge into frame.
+const FIELD_INSET = 0.14;
+const FIELD_SCALE = 1 + FIELD_INSET * 2;
+
+// Cards: blobs sized off the field so they stay round on wide cards.
 const BLOBS_CARD: BlobSpec[] = [
-  { top: '-30%', left: '-12%', w: '62%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
-  { top: '-18%', left: '52%', w: '58%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
-  { top: '38%', left: '-8%', w: '60%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
-  { top: '34%', left: '56%', w: '66%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
+  { top: -0.3, left: -0.12, w: 0.62, dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
+  { top: -0.18, left: 0.52, w: 0.58, dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
+  { top: 0.38, left: -0.08, w: 0.6, dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
+  { top: 0.34, left: 0.56, w: 0.66, dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
 ];
 
-// Screens: the original overlapping full-bleed layout (tall containers keep
-// these near-circular, and it fills the page softly).
+// Screens: the original overlapping full-bleed layout.
 const BLOBS_AMBIENT: BlobSpec[] = [
-  { top: '-10%', left: '-8%', w: '78%', h: '82%', dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
-  { top: '8%', left: '38%', w: '74%', h: '78%', dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
-  { top: '34%', left: '-12%', w: '82%', h: '80%', dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
-  { top: '30%', left: '40%', w: '88%', h: '86%', dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
+  { top: -0.1, left: -0.08, w: 0.78, h: 0.82, dur: 17, delay: 0, dx: 0.22, dy: 0.16, s0: 1, s1: 1.25 },
+  { top: 0.08, left: 0.38, w: 0.74, h: 0.78, dur: 21, delay: 4, dx: -0.2, dy: 0.18, s0: 1.1, s1: 0.92 },
+  { top: 0.34, left: -0.12, w: 0.82, h: 0.8, dur: 25, delay: 9, dx: 0.18, dy: -0.16, s0: 0.95, s1: 1.2 },
+  { top: 0.3, left: 0.4, w: 0.88, h: 0.86, dur: 19, delay: 6, dx: -0.16, dy: -0.2, s0: 1.15, s1: 0.95 },
 ];
 
-function Blob({
-  color,
-  spec,
-  drift,
-  speed,
-}: {
+// parallax travel (px) at full tilt — matches the old interpolate ranges
+const TILT_X = 84;
+const TILT_Y = 60;
+
+const fade = (hex: string, alpha: string) => `${hex}${alpha}`;
+
+interface ResolvedBlob {
+  cx: number;
+  cy: number;
+  r: number;
   color: string;
   spec: BlobSpec;
-  drift: number;
-  speed: number;
-}) {
-  const progress = useRef(new Animated.Value(0)).current;
+}
+
+/** One drifting, breathing blob — its own progress worklet on the UI thread. */
+function Blob({ blob, drift, speed }: { blob: ResolvedBlob; drift: number; speed: number }) {
+  const { cx, cy, r, color, spec } = blob;
+  const p = useSharedValue(0);
 
   useEffect(() => {
-    if (speed <= 0) return; // motion "off"
+    if (speed <= 0) {
+      cancelAnimation(p);
+      p.value = 0;
+      return;
+    }
     const duration = (spec.dur * 1000) / speed;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(progress, {
-          toValue: 1,
-          duration,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(progress, {
-          toValue: 0,
-          duration,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
+    // negative animation-delay feel: stagger the loop starts
+    p.value = withDelay(
+      spec.delay * 100,
+      withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.ease) }), -1, true)
     );
-    // stagger starts like the negative animation-delays in the design
-    const timer = setTimeout(() => loop.start(), spec.delay * 100);
-    return () => {
-      clearTimeout(timer);
-      loop.stop();
-    };
-  }, [progress, spec, speed]);
+    return () => cancelAnimation(p);
+  }, [p, spec, speed]);
 
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, spec.dx * drift] });
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, spec.dy * drift] });
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [spec.s0, spec.s1] });
+  const center = useDerivedValue(() => {
+    'worklet';
+    // a plain point, not vec() — vec isn't a worklet and would throw on the UI thread
+    return { x: cx + spec.dx * drift * p.value, y: cy + spec.dy * drift * p.value };
+  }, [cx, cy, drift, spec]);
+
+  const radius = useDerivedValue(() => {
+    'worklet';
+    return r * (spec.s0 + (spec.s1 - spec.s0) * p.value);
+  }, [r, spec]);
 
   return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        top: spec.top as `${number}%`,
-        left: spec.left as `${number}%`,
-        width: spec.w as `${number}%`,
-        ...(spec.h ? { height: spec.h as `${number}%` } : { aspectRatio: 1 }),
-        transform: [{ translateX }, { translateY }, { scale }],
-      }}
-    >
-      <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <Defs>
-          {/* gaussian-like falloff — reads as blurred glow, not a circle */}
-          <RadialGradient id="g" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={color} stopOpacity={0.72} />
-            <Stop offset="22%" stopColor={color} stopOpacity={0.6} />
-            <Stop offset="42%" stopColor={color} stopOpacity={0.38} />
-            <Stop offset="62%" stopColor={color} stopOpacity={0.18} />
-            <Stop offset="82%" stopColor={color} stopOpacity={0.05} />
-            <Stop offset="100%" stopColor={color} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Ellipse cx="50" cy="50" rx="50" ry="50" fill="url(#g)" />
-      </Svg>
-    </Animated.View>
+    <Circle c={center} r={radius}>
+      {/* soft falloff; the group Blur turns it into a real gaussian glow */}
+      <RadialGradient
+        c={center}
+        r={radius}
+        colors={[fade(color, 'e6'), fade(color, '73'), fade(color, '00')]}
+        positions={[0, 0.45, 1]}
+      />
+    </Circle>
   );
 }
 
@@ -146,32 +152,76 @@ export function MeshGradient({
   blobCount = 4,
   style,
 }: Props) {
-  const parallax = tilt
-    ? [
-        {
-          translateX: tilt.x.interpolate({ inputRange: [-0.5, 0.5], outputRange: [42, -42] }),
-        },
-        {
-          translateY: tilt.y.interpolate({ inputRange: [-0.5, 0.5], outputRange: [30, -30] }),
-        },
-      ]
-    : [];
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const { w, h } = size;
+
+  // whole-field parallax shift (all blobs move together); identity without tilt
+  const tiltTransform = useDerivedValue(() => {
+    'worklet';
+    if (!tilt) return [{ translateX: 0 }, { translateY: 0 }];
+    return [{ translateX: tilt.x.value * -TILT_X }, { translateY: tilt.y.value * -TILT_Y }];
+  }, [tilt]);
+
+  const count = Math.max(2, Math.min(4, blobCount));
+  const specs = (veil === 'ambient' ? BLOBS_AMBIENT : BLOBS_CARD).slice(0, count);
+
+  // map the fractional specs onto the oversized field, in canvas pixels
+  const fieldX = -FIELD_INSET * w;
+  const fieldY = -FIELD_INSET * h;
+  const fieldW = FIELD_SCALE * w;
+  const fieldH = FIELD_SCALE * h;
+  const blobs: ResolvedBlob[] = specs.map((spec, i) => {
+    const diameter = spec.w * fieldW;
+    const r = diameter / 2;
+    const left = fieldX + spec.left * fieldW;
+    const top = fieldY + spec.top * fieldH;
+    const heightPx = spec.h ? spec.h * fieldH : diameter;
+    return {
+      cx: left + r,
+      cy: top + heightPx / 2,
+      r,
+      color: palette.blobs[i % palette.blobs.length],
+      spec,
+    };
+  });
+
+  const blurRadius = Math.max(10, Math.min(40, Math.min(w, h) * 0.05));
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, overflow: 'hidden' }, style]}>
-      <Animated.View style={[styles.field, { transform: parallax }]}>
-        {(veil === 'ambient' ? BLOBS_AMBIENT : BLOBS_CARD)
-          .slice(0, Math.max(2, Math.min(4, blobCount)))
-          .map((spec, i) => (
-          <Blob
-            key={i}
-            color={palette.blobs[i % palette.blobs.length]}
-            spec={spec}
-            drift={drift}
-            speed={speed}
-          />
-        ))}
-      </Animated.View>
+    <View
+      style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, overflow: 'hidden' }, style]}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width !== w || height !== h) setSize({ w: width, h: height });
+      }}
+    >
+      {w > 0 && h > 0 && (
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Group transform={tiltTransform}>
+            <Group>
+              {/* the real gaussian blur, applied to every blob in this group */}
+              <Blur blur={blurRadius} />
+              {blobs.map((blob, i) => (
+                <Blob key={i} blob={blob} drift={drift} speed={speed} />
+              ))}
+            </Group>
+          </Group>
+          {veil !== 'none' && (
+            <Rect x={0} y={0} width={w} height={h}>
+              <LinearGradient
+                start={vec(0, 0)}
+                end={vec(0, h)}
+                colors={
+                  veil === 'card'
+                    ? ['#0000000d', '#0000001a', '#0000006b']
+                    : ['#07051066', '#070510eb', '#070510ff']
+                }
+                positions={veil === 'card' ? [0, 0.42, 1] : [0, 0.38, 1]}
+              />
+            </Rect>
+          )}
+        </Canvas>
+      )}
       {grain && (
         <Image
           source={require('../../assets/mesh/noise.png')}
@@ -179,22 +229,6 @@ export function MeshGradient({
           style={[StyleSheet.absoluteFill, { width: undefined, height: undefined, opacity: 0.55 }]}
         />
       )}
-      {veil !== 'none' && (
-        <LinearGradient
-          colors={
-            veil === 'card'
-              ? ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.10)', 'rgba(0,0,0,0.42)']
-              : ['rgba(7,5,16,0.4)', 'rgba(7,5,16,0.92)', '#070510']
-          }
-          locations={veil === 'card' ? [0, 0.42, 1] : [0, 0.38, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // oversized so parallax + drift never reveal an edge (the design's inset: -14%)
-  field: { position: 'absolute', top: '-14%', left: '-14%', width: '128%', height: '128%' },
-});
