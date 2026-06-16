@@ -16,14 +16,14 @@ class EchoWidgetModule : Module() {
     Name("EchoWidget")
 
     Function("setCards") { json: String ->
-      val context = appContext.reactContext ?: return@Function
-      WidgetStore.writeCardsJson(context, json)
-      notifyWidget(context)
+      appContext.reactContext?.let { context ->
+        WidgetStore.writeCardsJson(context, json)
+        notifyWidget(context)
+      }
     }
 
     Function("refresh") {
-      val context = appContext.reactContext ?: return@Function
-      notifyWidget(context)
+      appContext.reactContext?.let { notifyWidget(it) }
     }
   }
 
