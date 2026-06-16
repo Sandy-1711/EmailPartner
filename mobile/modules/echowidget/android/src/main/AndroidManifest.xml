@@ -5,7 +5,6 @@
       android:exported="true">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-        <action android:name="expo.modules.echowidget.ITEM_CLICK" />
       </intent-filter>
       <meta-data
         android:name="android.appwidget.provider"
@@ -16,5 +15,16 @@
       android:name="expo.modules.echowidget.EchoWidgetService"
       android:permission="android.permission.BIND_REMOTEVIEWS"
       android:exported="false" />
+
+    <!-- invisible trampoline so widget taps can start the FG NarrationService
+         (a broadcast-context FGS start is denied on Android 12+) -->
+    <activity
+      android:name="expo.modules.echowidget.EchoWidgetActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:excludeFromRecents="true"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:launchMode="singleTask" />
   </application>
 </manifest>

@@ -36,7 +36,8 @@ object MeshRenderer {
     val canvas = Canvas(bmp)
     val sx = w / DW
     val sy = h / DH
-    val corner = 24f * (w / DW)
+    // tie rounding to the short side so corners read consistently at any aspect
+    val corner = minOf(w, h) * 0.12f
 
     // rounded clip — corners stay transparent so the card reads as rounded
     val clip = Path().apply {

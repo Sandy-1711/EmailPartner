@@ -1,5 +1,6 @@
 package expo.modules.echowidget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
@@ -13,19 +14,34 @@ import android.widget.RemoteViewsService
  */
 class EchoWidgetFactory(
   private val context: Context,
+  private val appWidgetId: Int,
 ) : RemoteViewsService.RemoteViewsFactory {
 
   private var cards: List<WidgetCard> = emptyList()
 
-  // Modest bitmap size: RemoteViews has a per-widget bitmap memory budget and
-  // the ImageView is fitXY, so a small soft mesh upscales fine.
-  private val meshW = 380
-  private val meshH = 180
+  // Mesh is rendered at the widget's actual aspect so fitXY doesn't stretch it
+  // (that was distorting the rounded corners). Recomputed on resize.
+  private var meshW = 460
+  private var meshH = 220
 
-  override fun onCreate() {}
+  override fun onCreate() {
+    computeMeshSize()
+  }
 
   override fun onDataSetChanged() {
+    computeMeshSize()
     cards = WidgetStore.readCards(context)
+  }
+
+  private fun computeMeshSize() {
+    val opts = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId)
+    val density = context.resources.displayMetrics.density
+    val wDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+    val hDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+    if (wDp > 0 && hDp > 0) {
+      meshW = (wDp * density).toInt().coerceIn(240, 600)
+      meshH = (hDp * density).toInt().coerceIn(150, 360)
+    }
   }
 
   override fun onDestroy() {
@@ -82,6 +98,10 @@ class EchoWidgetFactory(
 }
 
 class EchoWidgetService : RemoteViewsService() {
-  override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-    EchoWidgetFactory(applicationContext)
+  override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
+    val appWidgetId = intent.getIntExtra(
+      AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID
+    )
+    return EchoWidgetFactory(applicationContext, appWidgetId)
+  }
 }
