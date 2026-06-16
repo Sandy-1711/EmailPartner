@@ -1,15 +1,23 @@
 import { Pause, Play } from 'lucide-react-native';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
 
 import { fonts } from '../theme';
 import type { TonePalette } from '../tones';
 
 /**
  * Echo Mail "listen to summary" control: accent play/pause circle + a
- * waveform that fills as it plays, pulses while playing, and scrubs by
- * touch (drag shows a scrub bar; the seek commits on release so dragging
- * stays 60fps instead of hammering the native player).
+ * waveform that fills as it plays and scrubs by touch. The scrub now runs on
+ * the UI thread (gesture-handler Pan + reanimated): the fill and scrub line
+ * follow the finger off the JS thread, and the actual seek commits on release
+ * so dragging never hammers the native player.
  */
 
 function seedFrom(id: string): number {
@@ -35,6 +43,35 @@ function fmt(sec: number): string {
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/** One row of waveform bars. Memoized so the 4Hz progress re-render (which
+ *  only moves the UI-thread fill width + the time text) never remounts them. */
+const WaveBars = React.memo(function WaveBars({
+  wave,
+  color,
+  w,
+}: {
+  wave: number[];
+  color: string;
+  w: number | '100%';
+}) {
+  return (
+    <View style={[styles.barsInner, { width: w }]}>
+      {wave.map((v, i) => (
+        <View
+          key={i}
+          style={{
+            flex: 1,
+            height: `${v * 100}%`,
+            minWidth: 2,
+            borderRadius: 4,
+            backgroundColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
+});
 
 interface Props {
   emailId: string;
@@ -67,20 +104,56 @@ export function WavePlayer({
   const hero = size === 'hero';
   const btn = hero ? 60 : 42;
   const barH = hero ? 52 : 28;
-  const barsWidth = useRef(0);
-  const barsPageX = useRef(0);
-  const barsRef = useRef<View | null>(null);
-  // While scrubbing, the waveform follows the finger via local state only;
-  // the actual seek fires once on release.
-  const [scrub, setScrub] = useState<number | null>(null);
-  const shown = scrub ?? progress;
+  const [barsW, setBarsW] = useState(0);
 
-  // locationX is relative to whichever child bar the finger hits, so seek
-  // math uses pageX against the container's measured window position.
-  const fractionFromPageX = (pageX: number) =>
-    barsWidth.current > 0
-      ? Math.max(0, Math.min(1, (pageX - barsPageX.current) / barsWidth.current))
-      : 0;
+  // playback progress mirrored into a shared value so the fill tracks it on the
+  // UI thread; while scrubbing, the finger position takes over.
+  const progressSV = useSharedValue(progress);
+  progressSV.value = progress;
+  const scrubX = useSharedValue(0);
+  const scrubbing = useSharedValue(0);
+  const shown = useDerivedValue(() =>
+    scrubbing.value ? scrubX.value : progressSV.value
+  );
+
+  // a JS mirror of the scrub fraction, only for the time label (cheap text
+  // re-render; the bars/line don't depend on it)
+  const [scrubFrac, setScrubFrac] = useState<number | null>(null);
+
+  const commitSeek = (f: number) => {
+    onSeek?.(f);
+    setScrubFrac(null);
+  };
+
+  const pan = Gesture.Pan()
+    .enabled(onSeek != null)
+    .minDistance(0)
+    .onBegin((e) => {
+      if (barsW <= 0) return;
+      const f = Math.max(0, Math.min(1, e.x / barsW));
+      scrubbing.value = 1;
+      scrubX.value = f;
+      runOnJS(setScrubFrac)(f);
+    })
+    .onUpdate((e) => {
+      if (barsW <= 0) return;
+      const f = Math.max(0, Math.min(1, e.x / barsW));
+      scrubX.value = f;
+      runOnJS(setScrubFrac)(f);
+    })
+    .onFinalize(() => {
+      const f = scrubX.value;
+      scrubbing.value = 0;
+      runOnJS(commitSeek)(f);
+    });
+
+  const filledStyle = useAnimatedStyle(() => ({ width: shown.value * barsW }));
+  const lineStyle = useAnimatedStyle(() => ({
+    opacity: scrubbing.value,
+    transform: [{ translateX: shown.value * barsW }],
+  }));
+
+  const displayed = scrubFrac ?? progress;
 
   return (
     <View style={{ width: '100%' }}>
@@ -112,60 +185,34 @@ export function WavePlayer({
           )}
         </Pressable>
 
-        <View
-          ref={barsRef}
-          style={[styles.bars, { height: barH }]}
-          onLayout={(e) => {
-            barsWidth.current = e.nativeEvent.layout.width;
-            barsRef.current?.measureInWindow((x) => {
-              barsPageX.current = x;
-            });
-          }}
-          onStartShouldSetResponder={() => onSeek != null}
-          onMoveShouldSetResponder={() => onSeek != null}
-          onResponderGrant={(e) => setScrub(fractionFromPageX(e.nativeEvent.pageX))}
-          onResponderMove={(e) => setScrub(fractionFromPageX(e.nativeEvent.pageX))}
-          onResponderRelease={(e) => {
-            const f = fractionFromPageX(e.nativeEvent.pageX);
-            setScrub(null);
-            onSeek?.(f);
-          }}
-          onResponderTerminate={() => setScrub(null)}
-        >
-          <View style={styles.barsInner}>
-            {wave.map((v, i) => {
-              const filled = i / wave.length <= shown;
-              return (
-                <View
-                  key={i}
-                  style={{
-                    flex: 1,
-                    height: `${v * 100}%`,
-                    minWidth: 2,
-                    borderRadius: 4,
-                    backgroundColor: filled ? palette.accent : 'rgba(255,255,255,0.26)',
-                  }}
-                />
-              );
-            })}
-          </View>
-          {scrub != null && (
-            <View
+        <GestureDetector gesture={pan}>
+          <View
+            style={[styles.bars, { height: barH }]}
+            onLayout={(e) => setBarsW(e.nativeEvent.layout.width)}
+          >
+            {/* base: unfilled bars */}
+            <WaveBars wave={wave} color="rgba(255,255,255,0.26)" w="100%" />
+            {/* fill: same bars in accent, clipped to the played/scrubbed width */}
+            <Animated.View
               pointerEvents="none"
-              style={[
-                styles.scrubLine,
-                { left: `${scrub * 100}%`, backgroundColor: palette.accent },
-              ]}
+              style={[styles.fill, filledStyle]}
+            >
+              <WaveBars wave={wave} color={palette.accent} w={barsW} />
+            </Animated.View>
+            {/* scrub line, visible only while dragging */}
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.scrubLine, { backgroundColor: palette.accent }, lineStyle]}
             />
-          )}
-        </View>
+          </View>
+        </GestureDetector>
       </View>
 
       {hero && (
         <View style={styles.times}>
-          <Text style={styles.time}>{fmt(shown * duration)}</Text>
+          <Text style={styles.time}>{fmt(displayed * duration)}</Text>
           <Text style={styles.time}>
-            {scrub != null ? 'Scrubbing' : playing ? 'Now playing' : progress >= 1 ? 'Replay' : 'Summary'}
+            {scrubFrac != null ? 'Scrubbing' : playing ? 'Now playing' : progress >= 1 ? 'Replay' : 'Summary'}
           </Text>
           <Text style={styles.time}>{duration > 0 ? fmt(duration) : '–:––'}</Text>
         </View>
@@ -186,21 +233,29 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
   },
-  bars: { flex: 1 },
+  bars: { flex: 1, justifyContent: 'center' },
   barsInner: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2.5,
     height: '100%',
   },
+  // clips the accent bars to the played width; inner row keeps full width so
+  // bars line up pixel-for-pixel with the base layer.
+  fill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
   scrubLine: {
     position: 'absolute',
     top: -6,
     bottom: -6,
+    left: 0,
     width: 3,
     borderRadius: 2,
-    opacity: 0.95,
   },
   times: {
     flexDirection: 'row',
