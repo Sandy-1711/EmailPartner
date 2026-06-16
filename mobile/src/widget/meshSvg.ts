@@ -51,21 +51,37 @@ export function meshSvg(palette: TonePalette): string {
   ).join('');
 
   // Readability veil: transparent at the top, darkening toward the bottom where
-  // the sender + phrase sit (matches MeshGradient's 'card' veil).
+  // the sender + phrase sit (matches MeshGradient's 'card' veil), now a touch
+  // stronger at the very bottom for crisper text.
   const veil =
     `<linearGradient id="veil" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}">` +
-    `<stop offset="0%" stop-color="#000000" stop-opacity="0.05"/>` +
-    `<stop offset="42%" stop-color="#000000" stop-opacity="0.10"/>` +
-    `<stop offset="100%" stop-color="#000000" stop-opacity="0.42"/>` +
+    `<stop offset="0%" stop-color="#000000" stop-opacity="0.04"/>` +
+    `<stop offset="40%" stop-color="#000000" stop-opacity="0.12"/>` +
+    `<stop offset="100%" stop-color="#000000" stop-opacity="0.5"/>` +
     `</linearGradient>`;
 
-  // No solid base rect: the corners stay transparent so the gradient base
-  // FlexWidget below shows through, and the clip rounds the bleed to match.
+  // A soft sheen near the top-left adds depth (mirrors the in-app blobs' glow);
+  // pure white at a whisper of opacity, fading out quickly.
+  const sheen =
+    `<radialGradient id="sheen" gradientUnits="userSpaceOnUse" cx="${W * 0.28}" cy="${H * 0.1}" r="${W * 0.6}">` +
+    `<stop offset="0%" stop-color="#ffffff" stop-opacity="0.10"/>` +
+    `<stop offset="55%" stop-color="#ffffff" stop-opacity="0.03"/>` +
+    `<stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>` +
+    `</radialGradient>`;
+
+  // preserveAspectRatio slice => the mesh COVERS the widget at any aspect
+  // ratio (fills, cropping) instead of letterboxing. A 1px inner stroke gives
+  // the card its subtle lit edge, like the in-app border.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-    `<defs>${grads}${veil}` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">` +
+    `<defs>${grads}${veil}${sheen}` +
     `<clipPath id="r"><rect x="0" y="0" width="${W}" height="${H}" rx="24" ry="24"/></clipPath></defs>` +
-    `<g clip-path="url(#r)">${circles}<rect x="0" y="0" width="${W}" height="${H}" fill="url(#veil)"/></g>` +
+    `<g clip-path="url(#r)">` +
+    `${circles}` +
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#sheen)"/>` +
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#veil)"/>` +
+    `<rect x="0.75" y="0.75" width="${W - 1.5}" height="${H - 1.5}" rx="23.25" ry="23.25" fill="none" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1.5"/>` +
+    `</g>` +
     `</svg>`
   );
 }

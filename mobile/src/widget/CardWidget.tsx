@@ -37,7 +37,7 @@ export function CardWidget({
   playingId?: string | null;
 }) {
   const palette = paletteFor(card?.tone);
-  const wave = card ? makeWave(card.id, 16) : [];
+  const wave = card ? makeWave(card.id, 9) : [];
   const playing = card != null && playingId === card.id;
 
   return (
@@ -67,91 +67,98 @@ export function CardWidget({
           svg={meshSvg(palette)}
           style={{ width: 'match_parent', height: 'match_parent' }}
         />
-        {/* content */}
+        {/* content — mirrors the in-app ToneCard: dot+sender header, phrase
+            hero, then a play pill + waveform footer */}
         <FlexWidget
           clickAction={card ? 'OPEN_URI' : 'OPEN_APP'}
           clickActionData={card ? { uri: `emailpartner://read/${card.id}` } : undefined}
           style={{
             width: 'match_parent',
             height: 'match_parent',
-            paddingHorizontal: 14,
-            paddingVertical: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
             justifyContent: 'space-between',
             alignItems: 'flex-start',
           }}
         >
         <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* tone dot with a faux-glow halo (widgets can't render shadows) */}
           <FlexWidget
             style={{
-              width: 7,
-              height: 7,
-              borderRadius: 4,
-              backgroundColor: palette.dot,
-              marginRight: 7,
-            }}
-          />
-          <TextWidget
-            text={palette.label.toUpperCase()}
-            maxLines={1}
-            style={{ fontSize: 10, color: '#ffffffeb', letterSpacing: 0.08 }}
-          />
-        </FlexWidget>
-
-        <FlexWidget style={{ width: 'match_parent' }}>
-          {card ? (
-            <TextWidget
-              text={card.sender}
-              maxLines={1}
-              style={{ fontSize: 11, color: '#ffffffc4', marginBottom: 3 }}
-            />
-          ) : null}
-          <TextWidget
-            text={card ? card.phrase : message ?? 'Open Echo Mail to get started'}
-            maxLines={2}
-            style={{
-              fontSize: card ? 19 : 14,
-              color: '#ffffff',
-              fontWeight: 'bold',
-              letterSpacing: -0.03,
-            }}
-          />
-        </FlexWidget>
-
-        {card && card.hasAudio ? (
-          <FlexWidget
-            // Plays in the app process headlessly; tap again to stop.
-            clickAction="PLAY_NARRATION"
-            clickActionData={{
-              id: card.id,
-              audioUrl: card.audioUrl,
-              phrase: card.phrase,
-              sender: card.sender,
-              tone: card.tone,
-            }}
-            style={{
-              flexDirection: 'row',
+              width: 14,
+              height: 14,
+              borderRadius: 7,
+              backgroundColor: `${palette.dot}40`,
+              justifyContent: 'center',
               alignItems: 'center',
-              marginTop: 8,
-              backgroundColor: '#00000042',
-              borderRadius: 17,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
+              marginRight: 8,
             }}
           >
             <FlexWidget
+              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: palette.dot }}
+            />
+          </FlexWidget>
+          <TextWidget
+            text={(card ? card.sender : 'ECHO MAIL').toUpperCase()}
+            maxLines={1}
+            style={{ fontSize: 11, color: '#ffffffe6', letterSpacing: 0.06, fontWeight: '600' }}
+          />
+        </FlexWidget>
+
+        <TextWidget
+          text={card ? card.phrase : message ?? 'Open Echo Mail to get started'}
+          maxLines={2}
+          style={{
+            fontSize: card ? 21 : 15,
+            color: '#ffffff',
+            fontWeight: 'bold',
+            letterSpacing: -0.4,
+          }}
+        />
+
+        {card && card.hasAudio ? (
+          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <FlexWidget
+              // Plays in the app process headlessly; tap again to stop.
+              clickAction="PLAY_NARRATION"
+              clickActionData={{
+                id: card.id,
+                audioUrl: card.audioUrl,
+                phrase: card.phrase,
+                sender: card.sender,
+                tone: card.tone,
+              }}
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: palette.accent,
-                justifyContent: 'center',
+                flexDirection: 'row',
                 alignItems: 'center',
-                marginRight: 8,
+                backgroundColor: '#00000047',
+                borderRadius: 999,
+                paddingLeft: 5,
+                paddingRight: 12,
+                paddingVertical: 5,
+                marginRight: 10,
               }}
             >
+              <FlexWidget
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: palette.accent,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 8,
+                }}
+              >
+                <TextWidget
+                  text={playing ? '■' : '▶'}
+                  style={{ fontSize: playing ? 9 : 11, color: '#0a0612' }}
+                />
+              </FlexWidget>
               <TextWidget
-                text={playing ? '■' : '▶'}
-                style={{ fontSize: playing ? 9 : 11, color: '#0a0612' }}
+                text={playing ? 'Playing' : 'Listen'}
+                maxLines={1}
+                style={{ fontSize: 12, color: '#ffffff', fontWeight: '600' }}
               />
             </FlexWidget>
             {wave.map((v, i) => (
@@ -159,9 +166,9 @@ export function CardWidget({
                 key={i}
                 style={{
                   width: 3,
-                  height: Math.round(5 + v * 13),
+                  height: Math.round(5 + v * 14),
                   borderRadius: 2,
-                  backgroundColor: playing ? palette.accent : '#ffffff59',
+                  backgroundColor: playing ? palette.accent : '#ffffff4d',
                   marginRight: 3,
                 }}
               />
