@@ -3,6 +3,7 @@ package expo.modules.echowidget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -42,7 +43,21 @@ class EchoWidgetProvider : AppWidgetProvider() {
     mgr.notifyAppWidgetViewDataChanged(ids, R.id.echo_stack)
   }
 
+  override fun onReceive(context: Context, intent: Intent) {
+    // A play-state change only needs the items re-read — NOT a full onUpdate,
+    // which re-runs setRemoteAdapter and RESETS the StackView (cards vanish
+    // until a scroll). So handle REFRESH as a data-change only.
+    if (intent.action == ACTION_REFRESH) {
+      val mgr = AppWidgetManager.getInstance(context)
+      val ids = mgr.getAppWidgetIds(ComponentName(context, EchoWidgetProvider::class.java))
+      if (ids.isNotEmpty()) mgr.notifyAppWidgetViewDataChanged(ids, R.id.echo_stack)
+      return
+    }
+    super.onReceive(context, intent)
+  }
+
   companion object {
+    const val ACTION_REFRESH = "expo.modules.echowidget.REFRESH"
     const val EXTRA_KIND = "kind"
     const val EXTRA_ID = "id"
     const val EXTRA_URL = "url"

@@ -128,18 +128,12 @@ class NarrationService : MediaSessionService() {
    */
   private fun notifyWidget() {
     try {
-      val manager = android.appwidget.AppWidgetManager.getInstance(this)
+      // Custom REFRESH action → the widget does a data-only refresh (re-reads
+      // items so the play icon flips). Sending APPWIDGET_UPDATE instead would
+      // re-run the provider's onUpdate + setRemoteAdapter and reset the deck.
       val component =
         android.content.ComponentName(this, "expo.modules.echowidget.EchoWidgetProvider")
-      val ids = manager.getAppWidgetIds(component)
-      if (ids.isNotEmpty()) {
-        sendBroadcast(
-          Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-            setComponent(component)
-            putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-          }
-        )
-      }
+      sendBroadcast(Intent("expo.modules.echowidget.REFRESH").setComponent(component))
     } catch (_: Exception) {
     }
   }
