@@ -19,6 +19,7 @@ class NarrationModule : Module() {
       NarrationService.currentId = id
       val intent = Intent(context, NarrationService::class.java).apply {
         action = NarrationService.ACTION_PLAY
+        putExtra(NarrationService.EXTRA_ID, id)
         putExtra(NarrationService.EXTRA_URL, url)
         putExtra(NarrationService.EXTRA_TITLE, title)
         putExtra(NarrationService.EXTRA_ARTIST, artist)

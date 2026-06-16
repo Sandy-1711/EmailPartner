@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+
+  <!-- The swipeable deck. Items come from EchoWidgetService (RemoteViewsFactory). -->
+  <StackView
+    android:id="@+id/echo_stack"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:loopViews="true" />
+
+  <!-- Shown when there are no cards yet. -->
+  <TextView
+    android:id="@+id/echo_empty"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:padding="20dp"
+    android:textColor="#FFFFFFFF"
+    android:textSize="14sp"
+    android:text="Open Echo Mail to get started" />
+</FrameLayout>

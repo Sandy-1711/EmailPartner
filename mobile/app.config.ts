@@ -1,23 +1,8 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
-import type { WithAndroidWidgetsParams } from 'react-native-android-widget';
 
-const widgetConfig: WithAndroidWidgetsParams = {
-  widgets: [
-    {
-      name: 'EmailCard',
-      label: 'EmailPartner',
-      description: 'Your latest email as art, with narration',
-      minWidth: '250dp',
-      minHeight: '110dp',
-      targetCellWidth: 4,
-      targetCellHeight: 2,
-      resizeMode: 'horizontal|vertical',
-      // Android enforces a 30 minute minimum; the app also refreshes the
-      // widget whenever it fetches fresh cards.
-      updatePeriodMillis: 1_800_000,
-    },
-  ],
-};
+// The home-screen widget is a native local module (modules/echowidget): it
+// registers its own AppWidgetProvider via the module manifest, so no widget
+// config plugin is needed here.
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -43,6 +28,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-audio',
     'expo-web-browser',
     'expo-secure-store',
-    ['react-native-android-widget', widgetConfig],
   ],
 });

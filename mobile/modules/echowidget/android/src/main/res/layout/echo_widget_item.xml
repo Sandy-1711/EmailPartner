@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One card in the swipe deck. The mesh is a Kotlin-drawn (real-blur) bitmap;
+     text is crisp native TextView. Header pinned top, footer pinned bottom. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/item_root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+
+  <ImageView
+    android:id="@+id/item_mesh"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY"
+    android:contentDescription="@null" />
+
+  <!-- header: tone dot + sender -->
+  <LinearLayout
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="top|start"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingLeft="16dp"
+    android:paddingTop="14dp">
+    <ImageView
+      android:id="@+id/item_dot"
+      android:layout_width="14dp"
+      android:layout_height="14dp"
+      android:layout_marginEnd="8dp"
+      android:contentDescription="@null" />
+    <TextView
+      android:id="@+id/item_sender"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:maxLines="1"
+      android:ellipsize="end"
+      android:textColor="#E6FFFFFF"
+      android:textSize="11sp"
+      android:textStyle="bold"
+      android:letterSpacing="0.06" />
+  </LinearLayout>
+
+  <!-- phrase hero -->
+  <TextView
+    android:id="@+id/item_phrase"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center_vertical|start"
+    android:paddingLeft="16dp"
+    android:paddingRight="16dp"
+    android:maxLines="2"
+    android:ellipsize="end"
+    android:textColor="#FFFFFFFF"
+    android:textSize="21sp"
+    android:textStyle="bold" />
+
+  <!-- footer: play pill + waveform -->
+  <LinearLayout
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom|start"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingLeft="16dp"
+    android:paddingBottom="14dp">
+    <LinearLayout
+      android:id="@+id/item_pill"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:gravity="center_vertical"
+      android:background="@drawable/echo_pill_bg"
+      android:paddingLeft="5dp"
+      android:paddingRight="12dp"
+      android:paddingTop="5dp"
+      android:paddingBottom="5dp"
+      android:layout_marginEnd="10dp">
+      <ImageView
+        android:id="@+id/item_play_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="@null" />
+      <TextView
+        android:id="@+id/item_play_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textColor="#FFFFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:text="Listen" />
+    </LinearLayout>
+    <ImageView
+      android:id="@+id/item_wave"
+      android:layout_width="wrap_content"
+      android:layout_height="20dp"
+      android:contentDescription="@null" />
+  </LinearLayout>
+</FrameLayout>

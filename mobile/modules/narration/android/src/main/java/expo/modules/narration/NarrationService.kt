@@ -74,6 +74,9 @@ class NarrationService : MediaSessionService() {
     ensureForeground()
     when (intent?.action) {
       ACTION_PLAY -> {
+        // widget taps start us directly (no JS), so adopt the id from the intent
+        intent.getStringExtra(EXTRA_ID)?.let { currentId = it }
+        persistPlayingId()
         val url = intent.getStringExtra(EXTRA_URL)
         val player = mediaSession?.player
         if (url != null && player != null) {
@@ -100,10 +103,21 @@ class NarrationService : MediaSessionService() {
 
   private fun stopPlayback() {
     currentId = null
+    persistPlayingId()
     mediaSession?.player?.stop()
     stopForeground(STOP_FOREGROUND_REMOVE)
     notifyWidget()
     stopSelf()
+  }
+
+  /**
+   * Mirror the playing id into the echowidget SharedPreferences so the native
+   * widget's play/stop icon stays in sync. Literal names (not a shared class)
+   * keep the two modules compile-decoupled — keep them aligned with WidgetStore.
+   */
+  private fun persistPlayingId() {
+    getSharedPreferences("echo_widget", MODE_PRIVATE)
+      .edit().putString("playing_id", currentId).apply()
   }
 
   /**
@@ -114,7 +128,8 @@ class NarrationService : MediaSessionService() {
   private fun notifyWidget() {
     try {
       val manager = android.appwidget.AppWidgetManager.getInstance(this)
-      val component = android.content.ComponentName(this, "$packageName.widget.EmailCard")
+      val component =
+        android.content.ComponentName(this, "expo.modules.echowidget.EchoWidgetProvider")
       val ids = manager.getAppWidgetIds(component)
       if (ids.isNotEmpty()) {
         sendBroadcast(
@@ -146,6 +161,7 @@ class NarrationService : MediaSessionService() {
   companion object {
     const val ACTION_PLAY = "expo.modules.narration.PLAY"
     const val ACTION_STOP = "expo.modules.narration.STOP"
+    const val EXTRA_ID = "id"
     const val EXTRA_URL = "url"
     const val EXTRA_TITLE = "title"
     const val EXTRA_ARTIST = "artist"

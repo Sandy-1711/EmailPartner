@@ -1,34 +1,29 @@
-import React from 'react';
-import { requestWidgetUpdate } from 'react-native-android-widget';
-
-import type { EmailCard } from '../lib/api';
-import { Narration } from '../lib/narration';
-import { CardWidget } from './CardWidget';
-import { latestReadyCard } from './widget-task-handler';
+import { EmailCard, phraseOf, senderOf } from '../lib/api';
+import { EchoWidget, EchoWidgetCard } from '../lib/echowidget';
 
 let lastSignature: string | null = null;
 
 /**
- * Push fresh data to any placed widgets; no-op when none exist.
- * Carries the live playing state (this is the render path that runs every
- * app poll — omitting it was stomping the widget back to the play icon
- * mid-narration) and skips renders when nothing changed.
+ * Push fresh data to the native StackView widget; no-op when none is placed.
+ * The widget renders natively and reflects play state on its own (via the
+ * shared prefs NarrationService writes), so this only needs the card data —
+ * skipped when nothing material changed.
  */
 export function refreshWidget(cards: EmailCard[]): void {
-  const card = latestReadyCard(cards);
-  const playingId = Narration.currentId();
-  const signature = `${card?.id ?? 'none'}|${card?.phrase ?? ''}|${playingId ?? ''}`;
+  const widgetCards: EchoWidgetCard[] = cards
+    .filter((c) => c.processing_status === 'ready')
+    .map((c) => ({
+      id: c.id,
+      phrase: phraseOf(c),
+      sender: senderOf(c),
+      tone: c.tone,
+      hasAudio: c.audio_url != null,
+      audioUrl: c.audio_url,
+    }));
+
+  const signature = widgetCards.map((c) => `${c.id}:${c.hasAudio}`).join('|');
   if (signature === lastSignature) return;
   lastSignature = signature;
 
-  requestWidgetUpdate({
-    widgetName: 'EmailCard',
-    renderWidget: () =>
-      React.createElement(CardWidget, {
-        card,
-        message: card ? undefined : 'No cards yet — send yourself an email',
-        playingId,
-      }),
-    widgetNotFound: () => {},
-  }).catch(() => {});
+  EchoWidget.setCards(widgetCards);
 }

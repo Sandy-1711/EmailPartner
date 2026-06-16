@@ -4,12 +4,9 @@
 import 'react-native-gesture-handler';
 
 import { registerRootComponent } from 'expo';
-import { registerWidgetTaskHandler } from 'react-native-android-widget';
 
 import App from './App';
-import { widgetTaskHandler } from './src/widget/widget-task-handler';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// The widget task handler runs headless when Android asks the widget to render.
+// The home-screen widget is now fully native (modules/echowidget) — no JS task
+// handler. registerRootComponent calls AppRegistry.registerComponent('main', () => App).
 registerRootComponent(App);
-registerWidgetTaskHandler(widgetTaskHandler);
