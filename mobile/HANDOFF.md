@@ -1,29 +1,32 @@
 # Echo Mail (EmailPartner mobile) — handoff
 
-State as of 2026-06-13. Backend feature-complete + tested. App implements the Echo Mail design; **audio now works app + widget via the native NarrationService** (user-confirmed). The two open bugs now have fixes shipped (pushed to master) but **NOT yet verified on-device** — verify these first next session. The user is frustrated with the iteration count — fix precisely, verify on-device BEFORE claiming done, no scattershot changes.
+State as of 2026-06-16. Backend feature-complete + tested. App implements the Echo Mail design; audio works app + widget via the native NarrationService. The user is frustrated with iteration count — fix precisely, verify before claiming done, no scattershot changes. Granular commits during work, no Co-Authored-By.
 
-## FIXES SHIPPED 2026-06-13 — verify on-device first (pushed, unverified)
+## DONE 2026-06-16 (verified working on the emulator `ep_test`)
 
-1. **Widget mesh background (was: flat gradient instead of mesh).**
-   Root cause confirmed: the mesh `ImageWidget` loaded a `require()`d PNG through Metro; in the widget's headless bitmap pass with Metro not serving (debug), the load failed and only the gradient base showed.
-   Fix shipped (commit d155b3c): replaced the PNG `ImageWidget` with an inline `SvgWidget` string — `src/widget/meshSvg.ts` builds the 4-blob mesh + veil as an SVG string from the tone palette; `SvgWidget` draws it natively via AndroidSVG (`renderToPicture`), so it never touches Metro and renders identically in debug AND release. Gradient base stays underneath as the can't-fail layer; old `assets/mesh/widget-*.png` now unused (can delete later).
-   Verify: mesh texture visible on the widget in a debug build with Metro down; check it fills (SvgWidget uses a plain ImageView, default FIT_CENTER — if it letterboxes oddly on some widget aspect ratios, the gradient base fills the gaps, but confirm it looks right).
+- **Both prior widget bugs are FIXED + user-verified** (no longer open): widget mesh renders via inline `SvgWidget` string (`src/widget/meshSvg.ts`, commit d155b3c) and the play/stop icon flips instantly from a SecureStore snapshot (`src/widget/cache.ts`, commit d82c1d0).
+- **Skia + Reanimated + Gesture Handler + Worklets added** (commit b554dfc): babel uses `react-native-worklets/plugin`; `index.ts` imports `react-native-gesture-handler` first; App root wrapped in `GestureHandlerRootView`.
+- **In-app MeshGradient → real Skia gaussian blur** (commit ab02dea): blobs are radial-gradient Circles under a Skia `Blur` image filter; drift + accelerometer tilt run as reanimated worklets on the UI thread. `useTilt` now returns SharedValues (was Animated.Value).
+- **Hero waveform scrub → UI thread** (gesture-handler Pan + reanimated, commits ecc45c5 / 07c8077 / 44d1350). Key fixes that made it actually work:
+  - The hero player is inside an RN `<Modal>`, a SEPARATE native window outside the app-root `GestureHandlerRootView` — gestures got NO touches until a nested `GestureHandlerRootView` was added inside the Modal (EmailModal). **Any gesture inside an RN Modal needs its own root.**
+  - Pan gated to horizontal (`activeOffsetX`/`failOffsetY`) + a raced `Tap`, so it coexists with the Detail ScrollView and keeps tap-to-seek.
+  - **Seek works on non-playing cards now** (user request): `usePlayback.seek(card, f)` seeks the loaded track, or starts a stopped card and applies the scrub once duration loads (`pendingSeekRef`, resolved in the status poll).
+  - Reanimated strict-mode "writing to value during render" fixed by moving the progress mirror into an effect.
 
-2. **Widget play/stop icon lag after audio ends naturally.**
-   Root cause confirmed: `notifyWidget()` broadcasts WIDGET_UPDATE on STATE_ENDED, but the handler awaited `fetchWidgetCard()` (HTTP) before rendering, so the icon lagged the audio.
-   Fix shipped (commit d82c1d0): `src/widget/cache.ts` persists the last rendered snapshot in SecureStore (module globals die with the headless JS context). WIDGET_UPDATE now renders IMMEDIATELY from cache with a fresh `Narration.currentId()`, then refetches and re-renders only if data changed. The click path writes the snapshot too (warm cache).
-   Verify: play narration from the widget, let it finish — icon should flip to ▶ instantly, not after a delay.
+## NEXT — agreed work plan 2026-06-16 (in priority order)
 
-## NEXT SESSION — agreed dependencies to add (in-app only, NOT the widget)
-
-Decided 2026-06-13. **The widget itself needs neither** — a home-screen widget is a one-shot bitmap/RemoteViews handed to the launcher, not a live RN surface, so Skia/Reanimated have nothing to attach to there. The widget is already maximally native (AndroidSVG draws the mesh, ExoPlayer plays audio). These two are for the IN-APP screens:
-- **react-native-skia** — redraw the in-app `MeshGradient` on a real Skia canvas with TRUE gaussian blur (currently faked with layered react-native-svg radial stops) and its own off-JS-thread render loop. Win is visual quality (real blur), not thread offload — the current mesh already animates via `Animated` `useNativeDriver: true`.
-- **react-native-reanimated** — move the hero-waveform scrub gesture to the UI thread (currently JS-thread `pageX` handling). Add only if the scrub feels laggy on a release build.
+User chose these; explicitly NOT doing real-backend-run, web frontend, or local-LLM this round.
+1. **Gmail backfill flood guard (backend).** When the backend + ngrok come up and Gmail `watch` starts, the first `history` sync floods the queue with the whole mailbox → burns LLM/TTS credits. Process ONLY genuinely-new mail: anchor on `watch` start time / current `historyId` and drop/skip anything older. See backend `app/services/queue/` + the Gmail watch + webhook path.
+2. **Widget UI polish.** Skia/Reanimated CANNOT run in the widget (one-shot bitmap, not a live RN surface). Polish via `SvgWidget` (AndroidSVG) — render the card visuals (mesh, waveform, play pill, glow) as a rich SVG so it approaches the in-app look. Text stays `TextWidget` (RemoteViews, crisp; SVG fonts are system-only).
+3. **Per-email notifications** with a Listen action (the real "always awake" channel — Android has no lock-screen widgets). Listen triggers the same headless NarrationService playback as the widget.
+4. **Swipeable email stack in the widget** (ListWidget / `RNWidgetCollectionService`) — each card a list row.
+5. **FCM push-fresh widget** — backend pushes when a card turns ready (replaces 30-min poll). NOTE: needs a Firebase project + `google-services.json` + a server key; flag if the user hasn't provided these.
+6. **Dead code cleanup:** delete unused `assets/mesh/widget-*.png` (widget is inline-SVG now); remove `expo-audio` (NarrationService owns all playback) + its config plugin.
 
 ## What is VERIFIED WORKING on the user's phone (don't break it)
 - Audio from app AND widget via native NarrationService (single ExoPlayer, foreground MediaSessionService, media3 1.9). Play, stop, no app-kill (startForeground called synchronously in onStartCommand — keep this).
 - Widget tap-to-toggle with instant icon flip (renders from click payload, no fetch).
-- Seek/scrub on the hero waveform (pageX-based, commit-on-release). Waveform pulse animation REMOVED at user request — do not re-add.
+- Seek/scrub on the hero waveform: UI-thread gesture-handler Pan + reanimated, commit-on-release, works on playing AND non-playing cards. Waveform pulse animation REMOVED at user request — do not re-add.
 - Stereo "speaker+earpiece" output is the phone's stereo pair (Motorola) — normal, not a bug.
 - Crash classes fixed: never swap/remove a native-driven Animated transform (Fabric 'forEach of null'); never let startForegroundService run without an immediate startForeground.
 
@@ -86,16 +89,18 @@ Decided 2026-06-13. **The widget itself needs neither** — a home-screen widget
 ### Widget dependency verdict (`react-native-android-widget@0.20.3`)
 The library renders the widget tree to a **bitmap** shown in an ImageView with `scaleType="matrix"` (no scaling, top-left anchored; see `RNWidget.java` / `rn_widget.xml`). Bitmap size comes from the launcher's `getAppWidgetOptions` *estimate* — when launchers over-report (common on OEM launchers), the bitmap clips at the **bottom/right**. That was the user's cutoff. Mitigation shipped: a transparent 6dp safety inset around the card absorbs clipping. The lib is otherwise sound; if cutoff persists, increase the inset or re-render on `WIDGET_RESIZED` (already handled).
 
-## What REMAINS
+## Build / test env (already solved — don't rediscover)
+- `JAVA_HOME="C:\Program Files\Microsoft\jdk-17.0.10.7-hotspot"` (system JAVA_HOME is broken). Build+install debug: `cd mobile/android && ./gradlew :app:installDebug` (autolinks new native modules without a prebuild; first Skia build ~20 min).
+- AVD `ep_test` exists (hand-written INI; avdmanager breaks on JDK 17): `emulator -avd ep_test`. Physical phone `ZA222LJR2B` also used.
+- No real backend needed: `C:\Users\sandy\AppData\Local\Temp\mock_ep.py` (mock API on :8000, fake instant sign-in, fake cards). `adb reverse tcp:8081 tcp:8081` + `tcp:8000 tcp:8000`, server URL `http://localhost:8000`. Debug APK needs Metro (`npx expo start`).
+- Skia logs `RNSkia: updateAndRelease() failed ... can safely be ignored` every frame on the emulator's software GPU — benign, not an error.
 
-1. **Verify the Echo Mail build** — a fresh APK build was the last step (new native deps: react-native-svg, expo-font). `mobile/android/app/build/outputs/apk/debug/app-debug.apk`; install on emulator `ep_test` or the phone, check: mesh motion, fonts, detail screen, widget render, lock-screen notification during playback (lock the phone while narration plays).
-   - Build env quirks (already solved, don't rediscover): `JAVA_HOME="C:\Program Files\Microsoft\jdk-17.0.10.7-hotspot"` (system JAVA_HOME is broken); AVD `ep_test` exists (created by hand-writing INI files — avdmanager breaks on JDK 17).
-   - Testing without the real backend: `C:\Users\sandy\AppData\Local\Temp\mock_ep.py` (mock API on :8000 incl. fake instant sign-in). Phone via USB: `adb reverse tcp:8081 tcp:8081` (Metro) + `tcp:8000 tcp:8000` (mock), server URL `http://localhost:8000`. Debug APK needs Metro running (`npx expo start`).
-2. **Run against the real backend** — Mongo + `uvicorn app.main:app` + ngrok + real Google sign-in; real TTS narration replaces the fake.wav (which makes play stop after ~5s).
-3. **Release APK** (standalone, no Metro): `cd mobile/android && gradlew assembleRelease` with the JAVA_HOME above.
-4. **Local model support** (user wants this eventually): add an OpenAI-compatible `LLMProvider` (Ollama/LM Studio) behind `LLM_PROVIDER`/`LLM_BASE_URL` env vars; the ABC + factory seam already exists in `app/infrastructure/llm/`.
-5. **Web frontend** still has the pre-Echo-Mail design; port phrase/tone/mesh look if one design language is wanted.
-6. Smaller: test for `GET /v1/cards/{id}`; invalid_grant hardening in the watch renewal loop; GCS storage; SSE.
+## DEFERRED (not this round, per user 2026-06-16)
+- **Run against the real backend** — Mongo + `uvicorn app.main:app` + ngrok + real Google sign-in; real TTS replaces fake.wav. (Do the backfill flood guard FIRST — see work plan #1 — or it burns credits.)
+- **Release APK** (standalone): `cd mobile/android && gradlew assembleRelease`. Will also surface the real "audio lag on tap" (debug JS is slow).
+- **Local LLM** (OpenAI-compatible `LLMProvider` Ollama/LM Studio behind `LLM_PROVIDER`/`LLM_BASE_URL`; ABC/factory seam in `app/infrastructure/llm/`).
+- **Web frontend** still pre-Echo-Mail design (user does not want it ported).
+- Smaller backend: test for `GET /v1/cards/{id}`; invalid_grant hardening in watch renewal; GCS storage; SSE.
 
 ## Conventions
 - Granular conventional commits DURING work (user has insisted repeatedly), no Co-Authored-By trailer.
