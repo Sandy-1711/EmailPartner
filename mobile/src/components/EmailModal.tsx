@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import type { Tilt } from '../hooks/useTilt';
 import type { Playback } from '../hooks/usePlayback';
@@ -59,6 +60,10 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      {/* RN Modal is a separate native window outside the app-root
+          GestureHandlerRootView, so the waveform scrub gesture needs its own
+          root here or it receives no touches. */}
+      <GestureHandlerRootView style={styles.root}>
       <View style={styles.root}>
         <MeshGradient
           palette={palette}
@@ -120,7 +125,7 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
                 duration={active ? playback.duration : 0}
                 onToggle={() => playback.toggle(card)}
                 onPreload={() => playback.preload(card)}
-                onSeek={active ? playback.seekTo : undefined}
+                onSeek={(f) => playback.seek(card, f)}
                 size="hero"
               />
             </View>
@@ -148,6 +153,7 @@ export function EmailDetail({ card, tilt, playback, onClose }: Props) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

@@ -14,8 +14,9 @@ export interface Playback {
   toggle: (card: EmailCard) => void;
   /** press-in warm-up; kept for API compatibility (native start is fast) */
   preload: (card: EmailCard) => void;
-  /** scrub the active narration; fraction 0..1 */
-  seekTo: (fraction: number) => void;
+  /** scrub a card; fraction 0..1. Works whether or not the card is playing —
+   *  a non-playing card starts from the scrubbed position. */
+  seek: (card: EmailCard, fraction: number) => void;
   stop: () => void;
 }
 
@@ -35,6 +36,8 @@ export function usePlayback(): Playback {
   // briefly — the player reports "not playing" while buffering.
   const commandAtRef = useRef(0);
   const durationMsRef = useRef(0);
+  // a scrub on a not-yet-loaded card: applied once the track reports a duration
+  const pendingSeekRef = useRef<{ id: string; fraction: number } | null>(null);
 
   // mirror the service state (covers widget-started playback, lock-screen
   // pause/resume, and track end). Adaptive cadence: 4Hz only while active,
@@ -45,11 +48,24 @@ export function usePlayback(): Playback {
         try {
           const status = await Narration.getStatus();
           durationMsRef.current = status.durationMs;
+
+          // apply a scrub queued before the freshly-started track had a duration
+          const pending = pendingSeekRef.current;
+          if (pending && status.id === pending.id && status.durationMs > 0) {
+            Narration.seekToMs(pending.fraction * status.durationMs);
+            pendingSeekRef.current = null;
+            commandAtRef.current = Date.now();
+            setDuration(status.durationMs / 1000);
+            setProgress(pending.fraction);
+          }
+
           if (Date.now() - commandAtRef.current > 900) {
             setPlayingId(status.id);
             setIsPlaying(status.playing);
           }
-          if (status.id && status.durationMs > 0) {
+          // hold the optimistic progress until the pending seek lands, so it
+          // doesn't flash back to 0 while the new track buffers
+          if (status.id && status.durationMs > 0 && !pendingSeekRef.current) {
             setDuration(status.durationMs / 1000);
             setProgress(Math.min(1, status.positionMs / status.durationMs));
           } else if (!status.id) {
@@ -95,15 +111,29 @@ export function usePlayback(): Playback {
     // ExoPlayer prepare-on-play is fast enough; kept as a no-op hook point.
   }, []);
 
-  const seekTo = useCallback((fraction: number) => {
-    if (durationMsRef.current <= 0) return;
-    const clamped = Math.max(0, Math.min(1, fraction));
-    commandAtRef.current = Date.now();
-    setProgress(clamped);
-    Narration.seekToMs(clamped * durationMsRef.current);
-  }, []);
+  const seek = useCallback(
+    (card: EmailCard, fraction: number) => {
+      if (!card.audio_url) return;
+      const clamped = Math.max(0, Math.min(1, fraction));
+      commandAtRef.current = Date.now();
+      // the loaded, active track: seek it directly
+      if (playingId === card.id && durationMsRef.current > 0) {
+        setProgress(clamped);
+        Narration.seekToMs(clamped * durationMsRef.current);
+        return;
+      }
+      // a different / not-yet-playing card: start it and seek once it loads
+      Narration.play(card.id, card.audio_url, phraseOf(card), senderOf(card));
+      setPlayingId(card.id);
+      setIsPlaying(true);
+      setProgress(clamped);
+      durationMsRef.current = 0;
+      pendingSeekRef.current = { id: card.id, fraction: clamped };
+    },
+    [playingId]
+  );
 
   useEffect(() => stop, [stop]);
 
-  return { playingId, isPlaying, progress, duration, toggle, preload, seekTo, stop };
+  return { playingId, isPlaying, progress, duration, toggle, preload, seek, stop };
 }

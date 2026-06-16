@@ -1,5 +1,5 @@
 import { Pause, Play } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -107,9 +107,12 @@ export function WavePlayer({
   const [barsW, setBarsW] = useState(0);
 
   // playback progress mirrored into a shared value so the fill tracks it on the
-  // UI thread; while scrubbing, the finger position takes over.
+  // UI thread; while scrubbing, the finger position takes over. Written in an
+  // effect (not during render) to satisfy Reanimated strict mode.
   const progressSV = useSharedValue(progress);
-  progressSV.value = progress;
+  useEffect(() => {
+    progressSV.value = progress;
+  }, [progress, progressSV]);
   const scrubX = useSharedValue(0);
   const scrubbing = useSharedValue(0);
   const shown = useDerivedValue(() =>
@@ -125,10 +128,15 @@ export function WavePlayer({
     setScrubFrac(null);
   };
 
+  // Inside the Detail ScrollView, so the pan must claim only horizontal drags
+  // (activeOffsetX) and yield vertical ones to the scroll (failOffsetY). A
+  // separate Tap keeps tap-to-seek, since a horizontal-gated pan never fires on
+  // a stationary touch. Raced so whichever resolves first wins.
   const pan = Gesture.Pan()
     .enabled(onSeek != null)
-    .minDistance(0)
-    .onBegin((e) => {
+    .activeOffsetX([-8, 8])
+    .failOffsetY([-14, 14])
+    .onStart((e) => {
       if (barsW <= 0) return;
       const f = Math.max(0, Math.min(1, e.x / barsW));
       scrubbing.value = 1;
@@ -141,11 +149,22 @@ export function WavePlayer({
       scrubX.value = f;
       runOnJS(setScrubFrac)(f);
     })
+    .onEnd(() => {
+      runOnJS(commitSeek)(scrubX.value);
+    })
     .onFinalize(() => {
-      const f = scrubX.value;
       scrubbing.value = 0;
-      runOnJS(commitSeek)(f);
     });
+
+  const tap = Gesture.Tap()
+    .enabled(onSeek != null)
+    .maxDuration(300)
+    .onEnd((e) => {
+      if (barsW <= 0) return;
+      runOnJS(commitSeek)(Math.max(0, Math.min(1, e.x / barsW)));
+    });
+
+  const gesture = Gesture.Race(pan, tap);
 
   const filledStyle = useAnimatedStyle(() => ({ width: shown.value * barsW }));
   const lineStyle = useAnimatedStyle(() => ({
@@ -185,7 +204,7 @@ export function WavePlayer({
           )}
         </Pressable>
 
-        <GestureDetector gesture={pan}>
+        <GestureDetector gesture={gesture}>
           <View
             style={[styles.bars, { height: barH }]}
             onLayout={(e) => setBarsW(e.nativeEvent.layout.width)}
