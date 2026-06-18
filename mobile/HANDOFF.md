@@ -88,11 +88,15 @@ User chose these; explicitly NOT doing real-backend-run, web frontend, or local-
 
 ## What's DONE
 
-### Backend (FastAPI + Mongo, 21 tests green: `python -m pytest tests`)
-- Gmail watch → Pub/Sub webhook → durable Mongo-claim queue (`app/services/queue/worker.py`, survives restarts via lease sweep) → Gemini summary + illustration + TTS narration (WAV).
-- Cards API: phrase + tone persisted (`card_phrase`/`card_tone`), `GET /v1/cards/{id}` returns the full body, session cookie **or** `Authorization: Bearer` auth.
+### Backend (FastAPI + Mongo, 42 tests green: `python -m pytest tests`)
+- Gmail watch → Pub/Sub webhook → durable Mongo-claim queue (`app/services/queue/worker.py`, survives restarts via lease sweep) → Gemini summary + TTS narration (WAV). **Image generation is OFF by default** (`ENABLE_IMAGE_GENERATION`, 2026-06-18) — the app renders a procedural MeshGradient, not the illustration; code path kept.
+- Cards API: phrase + tone persisted, `GET /v1/cards/{id}` returns the full body, session cookie **or** `Authorization: Bearer` auth.
+- **SSE live updates (2026-06-18):** `GET /v1/cards/stream` (text/event-stream) pushes a `card_ready` event when a card finishes — `CardEventBus` is both a CardNotifier sink and the SSE source, fanned out with FCM via `CompositeNotifier`. In-process only (single uvicorn worker → Redis for multi-worker). Mobile not wired to it yet (still polls).
+- **FCM push (2026-06-18):** `POST /v1/devices` registers a token; the worker pushes ready cards via FCM HTTP v1 (`app/infrastructure/notifications/`, google-auth, no firebase-admin). Gated on `FIREBASE_CREDENTIALS_FILE`.
+- **Watch renewal hardening (2026-06-18):** on `invalid_grant` (revoked access) the account is marked DISABLED instead of retried forever.
 - Mobile OAuth: `GET /v1/auth/google/start?client=mobile` → callback 303s to `emailpartner://auth?token=…`.
-- Web frontend at `/` (older glassmorphism design — NOT yet updated to Echo Mail).
+- **No web frontend** — removed 2026-06-18 (mobile-only product); `/` returns JSON. `/static/illustrations` mount stays (serves the audio WAVs).
+- **Checks/CI:** ruff + pyright + pytest, enforced by pre-commit and `.github/workflows/backend.yml`. Android APK build in `.github/workflows/android.yml` (needs the `GOOGLE_SERVICES_JSON` repo secret).
 
 ### Mobile app (`mobile/`, Expo SDK 56, TypeScript, tsc-clean)
 **Design = "Echo Mail"** from the Claude Design bundle (tokens in the repo now; original bundle: claude.ai/design "Email Widget Dashboard" project):
