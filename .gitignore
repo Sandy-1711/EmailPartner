@@ -2,3 +2,10 @@
 .env*
 __pycache__/
 var/
+
+# Firebase secrets — NEVER commit
+# Backend admin SDK service-account key (private key inside)
+*firebase-adminsdk*.json
+# Client FCM config (lives at mobile/google-services.json once moved)
+google-services.json
+**/google-services.json
