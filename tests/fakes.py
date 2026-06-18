@@ -53,10 +53,12 @@ class FakeLLM(LLMProvider):
 class FakeImage(ImageProvider):
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
+        self.calls: list[tuple[str, str, tuple[int, int]]] = []
 
     async def generate(
         self, prompt: str, model: str, size: tuple[int, int]
     ) -> GeneratedImage:
+        self.calls.append((prompt, model, size))
         if self.error is not None:
             raise self.error
         return GeneratedImage(data=b"png-bytes", mime_type="image/png")

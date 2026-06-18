@@ -55,7 +55,8 @@ async def claimed_email(store: EmailStore):
 
 async def test_process_success_produces_full_card(db_manager, app_settings):
     storage = FakeStorage()
-    pipeline, store = build_pipeline(db_manager, app_settings, storage=storage)
+    settings = app_settings.model_copy(update={"enable_image_generation": True})
+    pipeline, store = build_pipeline(db_manager, settings, storage=storage)
     email = await claimed_email(store)
 
     await pipeline.process(email)
@@ -69,6 +70,20 @@ async def test_process_success_produces_full_card(db_manager, app_settings):
     assert stored.card_background_url == f"mem://users/{email.user_id}/emails/{email.id}.png"
     assert stored.card_audio_url == f"mem://users/{email.user_id}/emails/{email.id}.wav"
     assert storage.blobs[f"users/{email.user_id}/emails/{email.id}.wav"][1] == "audio/wav"
+
+
+async def test_image_generation_disabled_by_default(db_manager, app_settings):
+    image = FakeImage()
+    pipeline, store = build_pipeline(db_manager, app_settings, image=image)
+    email = await claimed_email(store)
+
+    await pipeline.process(email)
+
+    stored = await store.get_by_id(email.id)
+    assert stored is not None
+    assert stored.processing_status == EmailProcessingStatus.READY
+    assert stored.card_background_url is None
+    assert image.calls == []  # the provider is never invoked when disabled
 
 
 async def test_summary_failure_marks_failed(db_manager, app_settings):
@@ -86,8 +101,9 @@ async def test_summary_failure_marks_failed(db_manager, app_settings):
 
 
 async def test_illustration_failure_is_tolerated(db_manager, app_settings):
+    settings = app_settings.model_copy(update={"enable_image_generation": True})
     pipeline, store = build_pipeline(
-        db_manager, app_settings, image=FakeImage(error=RuntimeError("no paint"))
+        db_manager, settings, image=FakeImage(error=RuntimeError("no paint"))
     )
     email = await claimed_email(store)
 

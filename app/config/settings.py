@@ -120,6 +120,12 @@ class Settings(BaseSettings):
         int, Field(validation_alias="PIPELINE_MAX_ATTEMPTS", default=5)
     ]
 
+    # The mobile app uses a procedural MeshGradient, not the generated
+    # illustration, so image generation is off by default (it burns image-model
+    # credits for an asset nothing displays). The pipeline code path is retained.
+    enable_image_generation: Annotated[
+        bool, Field(validation_alias="ENABLE_IMAGE_GENERATION", default=False)
+    ]
     image_provider: Annotated[
         str, Field(validation_alias="IMAGE_PROVIDER", default="gemini")
     ]

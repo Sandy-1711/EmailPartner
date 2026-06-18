@@ -116,6 +116,11 @@ class EmailPipeline:
         user_id: str,
         summary: SummaryResult,
     ) -> str | None:
+        # The mobile app renders a procedural MeshGradient, not this illustration,
+        # so generation is off by default — flip enable_image_generation to revive
+        # it (the code path is kept intact).
+        if not self._settings.enable_image_generation:
+            return None
         try:
             image = await self._image.generate(
                 prompt=build_illustration_prompt(
