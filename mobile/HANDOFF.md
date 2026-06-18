@@ -84,7 +84,7 @@ User chose these; explicitly NOT doing real-backend-run, web frontend, or local-
 1. **"Always awake" lock-screen + widget with swipeable email stack.** Reality: Android has no lock-screen widgets (removed in 5.0). The channel is **notifications**: post a rich notification per new email (phrase + Listen action that triggers headless playback — same mechanism as the widget play). Swipeable stack IN the widget is possible via the library's collection/ListWidget support (`RNWidgetCollectionService` exists) — render each email as a list row. Both are designed, not built.
 2. **Audio lag on tap** — mostly debug-build JS + WAV buffering. Fixes: release build, and preloading the player for the newest card.
 3. **Push-fresh widget** — currently app-poll + 30-min cycle; the real answer is FCM push from the backend worker when a card turns ready.
-4. **Agentic + memory features** (future) — keep the app architecture clean for it: api.ts is the only network seam, playback is one hook, tones/tweaks are contexts.
+4. **Agentic + memory features** — NOW THE NEXT MAJOR EFFORT. Full design agreed 2026-06-18 in `docs/agentic-architecture.md` (chat-with-your-inbox: RAG memory, voice-aware drafting/sending, watches, read-aloud, contact research). Decisions: Qdrant (local Docker) vectors; per-user `autonomy_level` (MANUAL/CONFIRM/AUTONOMOUS); voice from story-prompt now with Sent-mining built-but-disabled. Build in the phases listed there (phase 1 = RAG foundation). App architecture is kept clean for it: api.ts is the only network seam, playback is one hook, tones/tweaks are contexts.
 
 ## What's DONE
 
