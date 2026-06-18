@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { usePushRegistration } from './src/hooks/usePushRegistration';
 import { clearToken, getToken, setToken } from './src/lib/config';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { SignInScreen } from './src/screens/SignInScreen';
@@ -34,6 +35,8 @@ export default function App() {
   useEffect(() => {
     getToken().then((token) => setAuth(token ? 'signedIn' : 'signedOut'));
   }, []);
+
+  usePushRegistration(auth === 'signedIn');
 
   // Handles both emailpartner://auth?token=... (sign-in fallback when the
   // browser fires the deep link directly) and emailpartner://play/<cardId>

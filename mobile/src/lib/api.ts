@@ -74,6 +74,15 @@ export function retryCard(cardId: string): Promise<{ status: string }> {
   return request<{ status: string }>(`/v1/cards/${cardId}/retry`, { method: 'POST' });
 }
 
+/** Register this device's FCM token so the worker can push freshly-ready cards. */
+export function registerDevice(token: string): Promise<{ status: string }> {
+  return request<{ status: string }>('/v1/devices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, platform: 'android' }),
+  });
+}
+
 export async function getSignInUrl(): Promise<string> {
   const { auth_url } = await request<{ auth_url: string }>(
     '/v1/auth/google/start?client=mobile'

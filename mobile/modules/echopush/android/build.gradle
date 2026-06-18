@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'expo.modules.echopush'
+version = '1.0.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "expo.modules.echopush"
+}
+
+dependencies {
+  // FCM. The com.google.gms.google-services plugin (applied at the app level by
+  // prebuild via android.googleServicesFile) supplies the init resource, so
+  // Firebase auto-initializes — no FirebaseApp.initializeApp() needed here.
+  implementation platform("com.google.firebase:firebase-bom:33.7.0")
+  implementation "com.google.firebase:firebase-messaging"
+}

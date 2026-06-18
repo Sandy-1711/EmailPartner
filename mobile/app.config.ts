@@ -16,6 +16,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'emailpartner',
   android: {
     package: 'com.emailpartner.app',
+    // Applied by prebuild: copies the file AND applies the com.google.gms
+    // .google-services gradle plugin, so Firebase (FCM) auto-initializes.
+    // The file carries client secrets — gitignored, never committed.
+    googleServicesFile: './google-services.json',
     adaptiveIcon: {
       backgroundColor: '#0b0d12',
       foregroundImage: './assets/android-icon-foreground.png',
