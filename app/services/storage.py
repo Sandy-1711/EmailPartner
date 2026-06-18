@@ -8,7 +8,7 @@ from app.infrastructure.db.main import DBManager
 from app.models.db.crypto import EncryptedBlob
 from app.models.db.device_token import DeviceTokens
 from app.models.db.emails import EmailProcessingStatus, Emails
-from app.models.db.gmail_account import GmailAccount
+from app.models.db.gmail_account import GmailAccount, GmailAccountStatus
 from app.models.db.user import Users
 from app.models.db.utils import utc_now
 
@@ -97,6 +97,16 @@ class GmailAccountStore:
                 "watch_expiration": {"$lt": before},
             },
             limit=limit,
+        )
+
+    async def mark_disabled(self, account_id: ObjectId) -> None:
+        """Take an account out of rotation (e.g. the user revoked access).
+        find_expiring only considers active accounts, so this stops the renewal
+        loop from retrying it forever."""
+        await self._db.update_one(
+            GmailAccount,
+            {"_id": account_id},
+            {"$set": {"status": GmailAccountStatus.DISABLED.value, "updated_at": utc_now()}},
         )
 
     async def update_watch(

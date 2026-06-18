@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from app.config.settings import Settings
 from app.infrastructure.db.main import DBManager
 from app.infrastructure.google.gmail import GmailApiClient
-from app.infrastructure.google.oauth import OAuthClient
+from app.infrastructure.google.oauth import OAuthClient, is_invalid_grant
 from app.infrastructure.security.crypto import CryptoManager
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.utils import utc_now
@@ -38,10 +38,17 @@ class WatchRenewalService:
             try:
                 await self._renew_one(account)
                 renewed += 1
-            except Exception:
-                logger.exception(
-                    "WatchRenewalService: failed to renew account %s", account.id
-                )
+            except Exception as exc:
+                if is_invalid_grant(exc):
+                    await self._gmail_store.mark_disabled(account.id)
+                    logger.warning(
+                        "WatchRenewalService: %s revoked access (invalid_grant); disabled",
+                        account.gmail_address,
+                    )
+                else:
+                    logger.exception(
+                        "WatchRenewalService: failed to renew account %s", account.id
+                    )
         return renewed
 
     async def _renew_one(self, account: GmailAccount) -> None:

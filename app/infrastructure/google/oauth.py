@@ -19,6 +19,19 @@ from app.config.settings import Settings
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
 
+def is_invalid_grant(exc: BaseException) -> bool:
+    """True when an OAuth refresh failed because the grant is gone — the user
+    revoked access or the refresh token expired. Google returns HTTP 400 with
+    body ``{"error": "invalid_grant"}``. Callers should stop retrying and
+    disable the account rather than churn on it forever."""
+    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 400:
+        return False
+    try:
+        return exc.response.json().get("error") == "invalid_grant"
+    except Exception:
+        return "invalid_grant" in exc.response.text
+
+
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_STATUSES
