@@ -105,7 +105,7 @@ class GmailAccountStore:
         history_id: str | None,
         watch_expiration: datetime | None,
     ) -> None:
-        update = {"updated_at": utc_now()}
+        update: dict[str, object] = {"updated_at": utc_now()}
         if history_id is not None:
             update["history_id"] = history_id
         if watch_expiration is not None:

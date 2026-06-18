@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from enum import Enum
+from typing import Protocol
 
 from httpx import AsyncClient
 
@@ -16,6 +17,13 @@ class SendResult(str, Enum):
     OK = "ok"
     INVALID = "invalid"  # token unregistered — caller should prune it
     ERROR = "error"
+
+
+class MessageSender(Protocol):
+    """A thing that can push a data payload to one device token. PushNotifier
+    depends on this (not FcmSender directly) so tests can substitute a fake."""
+
+    async def send(self, token: str, data: dict[str, str]) -> SendResult: ...
 
 
 class FcmSender:

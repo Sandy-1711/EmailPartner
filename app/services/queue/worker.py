@@ -3,14 +3,22 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Protocol
 
 from app.infrastructure.db.main import DBManager
 from app.models.db.emails import EmailProcessingStatus, Emails
 from app.models.db.utils import utc_now
-from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.storage import EmailStore
 
 logger = logging.getLogger(__name__)
+
+
+class EmailProcessor(Protocol):
+    """The one thing the worker needs of a pipeline: turn a claimed email into
+    a finished card. Depending on the interface (not EmailPipeline directly)
+    keeps the worker decoupled and lets tests substitute a fake."""
+
+    async def process(self, email: Emails) -> None: ...
 
 
 class PipelineWorker:
@@ -24,7 +32,7 @@ class PipelineWorker:
     def __init__(
         self,
         db_manager: DBManager,
-        pipeline: EmailPipeline,
+        pipeline: EmailProcessor,
         *,
         concurrency: int = 2,
         poll_interval_seconds: float = 15.0,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from bson import ObjectId
@@ -12,8 +13,8 @@ from app.services.storage import EmailStore
 pytestmark = pytest.mark.anyio
 
 
-def make_email(message_id: str = "msg-1", **overrides) -> Emails:
-    defaults = dict(
+def make_email(message_id: str = "msg-1", **overrides: Any) -> Emails:
+    defaults: dict[str, Any] = dict(
         user_id=ObjectId(),
         gmail_account_id=ObjectId(),
         gmail_message_id=message_id,
