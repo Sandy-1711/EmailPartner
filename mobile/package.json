@@ -25,11 +25,15 @@
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },
+  "comment:scripts": "Build scripts target Windows (npm runs them via cmd) and pin JDK 17 — the system JAVA_HOME is broken on this machine. installDebug/apk:* assume android/ exists (run `prebuild` first when native modules change).",
   "scripts": {
     "start": "expo start",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "expo prebuild --clean",
     "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
+    "android:install": "set \"JAVA_HOME=C:\\Program Files\\Microsoft\\jdk-17.0.10.7-hotspot\" && cd android && gradlew :app:installDebug",
+    "apk:debug": "set \"JAVA_HOME=C:\\Program Files\\Microsoft\\jdk-17.0.10.7-hotspot\" && cd android && gradlew assembleDebug",
+    "apk:release": "set \"JAVA_HOME=C:\\Program Files\\Microsoft\\jdk-17.0.10.7-hotspot\" && cd android && gradlew assembleRelease"
   },
   "private": true
 }
