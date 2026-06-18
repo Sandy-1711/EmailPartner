@@ -61,6 +61,10 @@ def get_pipeline_worker(request: Request) -> PipelineWorker:
     return _from_state(request, "pipeline_worker", "PipelineWorker")
 
 
+def get_event_bus(request: Request):
+    return _from_state(request, "event_bus", "CardEventBus")
+
+
 def get_session_user_id(
     session_manager: SessionManager = Depends(get_session_manager),
     session_cookie: str | None = Cookie(

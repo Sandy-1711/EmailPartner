@@ -3,15 +3,18 @@ from __future__ import annotations
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.dependencies import (
     get_db_manager,
+    get_event_bus,
     get_pipeline_worker,
     get_session_user_id,
 )
 from app.infrastructure.db.main import DBManager
 from app.models.api.cards import CardDetail, CardListResponse, EmailCard
 from app.models.db.emails import Emails
+from app.services.events import CardEventBus
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
 
@@ -56,6 +59,32 @@ async def list_cards(
     cards = [_to_card(email) for email in emails]
     next_offset = offset + len(cards) if len(cards) == limit else None
     return CardListResponse(items=cards, limit=limit, offset=offset, next_offset=next_offset)
+
+
+@router.get("/stream")
+async def stream_cards(
+    event_bus: CardEventBus = Depends(get_event_bus),
+    session_user_id: str | None = Depends(get_session_user_id),
+) -> StreamingResponse:
+    """Server-Sent Events: pushes a `card_ready` event the moment a card
+    finishes processing, so the app updates live instead of polling. Declared
+    before /{card_id} so "stream" isn't parsed as a card id."""
+    if session_user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in required")
+
+    async def events():
+        yield ": connected\n\n"  # open the stream immediately
+        async for payload in event_bus.subscribe(session_user_id):
+            if payload is None:
+                yield ": ping\n\n"  # heartbeat to keep the connection alive
+            else:
+                yield f"event: card_ready\ndata: {payload}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{card_id}", response_model=CardDetail)

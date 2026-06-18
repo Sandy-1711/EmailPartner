@@ -49,6 +49,37 @@ class CardNotifier(Protocol):
     ) -> None: ...
 
 
+class CompositeNotifier:
+    """Fans a card-ready event out to several sinks (FCM push + the SSE bus).
+    A failing sink is logged and skipped so it can't block the others."""
+
+    def __init__(self, notifiers: list[CardNotifier]) -> None:
+        self._notifiers = notifiers
+
+    async def notify_card_ready(
+        self,
+        *,
+        user_id: ObjectId,
+        card_id: str,
+        phrase: str,
+        sender: str,
+        tone: str | None,
+        audio_url: str | None,
+    ) -> None:
+        for notifier in self._notifiers:
+            try:
+                await notifier.notify_card_ready(
+                    user_id=user_id,
+                    card_id=card_id,
+                    phrase=phrase,
+                    sender=sender,
+                    tone=tone,
+                    audio_url=audio_url,
+                )
+            except Exception:
+                logger.exception("CompositeNotifier: a notification sink failed")
+
+
 class PushNotifier:
     """Pushes a freshly-ready card to all of a user's registered devices.
 

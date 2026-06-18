@@ -21,7 +21,8 @@ from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.infrastructure.storage.local import LocalBlobStorage
 from app.routers.v1 import router as v1_router
-from app.services.notifications.push import PushNotifier
+from app.services.events import CardEventBus
+from app.services.notifications.push import CardNotifier, CompositeNotifier, PushNotifier
 from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.queue.worker import PipelineWorker
 from app.services.watch.renewal import WatchRenewalService
@@ -85,6 +86,10 @@ async def lifespan(app: FastAPI):
         settings.local_storage_dir, settings.local_storage_public_base_url
     )
 
+    # Card-ready sinks: SSE bus (always) + FCM push (when configured), fanned
+    # out together so the app gets live updates and offline notifications.
+    event_bus = CardEventBus()
+    app.state.event_bus = event_bus
     push_sender = (
         build_push_sender(
             credentials_file=settings.firebase_credentials_file,
@@ -93,9 +98,10 @@ async def lifespan(app: FastAPI):
         if settings.enable_push_notifications
         else None
     )
-    notifier = (
-        PushNotifier(app.state.db_manager, push_sender) if push_sender is not None else None
-    )
+    sinks: list[CardNotifier] = [event_bus]
+    if push_sender is not None:
+        sinks.insert(0, PushNotifier(app.state.db_manager, push_sender))
+    notifier = CompositeNotifier(sinks)
 
     pipeline = EmailPipeline(
         app.state.db_manager,
