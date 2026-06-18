@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies import (
     get_db_manager,
+    get_email_memory,
     get_event_bus,
     get_pipeline_worker,
     get_session_user_id,
@@ -15,6 +16,7 @@ from app.infrastructure.db.main import DBManager
 from app.models.api.cards import CardDetail, CardListResponse, EmailCard
 from app.models.db.emails import Emails
 from app.services.events import CardEventBus
+from app.services.memory import EmailMemory
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
 
@@ -85,6 +87,24 @@ async def stream_cards(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/search", response_model=CardListResponse)
+async def search_cards(
+    q: str = Query(min_length=1),
+    limit: int = Query(default=10, ge=1, le=50),
+    memory: EmailMemory | None = Depends(get_email_memory),
+    session_user_id: str | None = Depends(get_session_user_id),
+) -> CardListResponse:
+    """Semantic search over the user's emails. Declared before /{card_id} so
+    "search" isn't parsed as a card id."""
+    if session_user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if memory is None:
+        raise HTTPException(status_code=503, detail="Semantic search unavailable")
+    emails = await memory.search(ObjectId(session_user_id), q, limit)
+    cards = [_to_card(email) for email in emails]
+    return CardListResponse(items=cards, limit=limit, offset=0, next_offset=None)
 
 
 @router.get("/{card_id}", response_model=CardDetail)

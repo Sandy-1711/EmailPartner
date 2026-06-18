@@ -3,9 +3,10 @@ from __future__ import annotations
 import pytest
 
 from app.models.db.emails import EmailProcessingStatus
+from app.services.memory import EmailMemory
 from app.services.pipeline.email_pipeline import EmailPipeline, SummaryResult
 from app.services.storage import EmailStore
-from tests.fakes import FakeImage, FakeLLM, FakeStorage
+from tests.fakes import FakeEmbedder, FakeImage, FakeLLM, FakeStorage, FakeVectorStore
 from tests.test_email_store import make_email
 
 pytestmark = pytest.mark.anyio
@@ -21,7 +22,9 @@ SUMMARY = SummaryResult(
 )
 
 
-def build_pipeline(db_manager, settings, llm=None, image=None, storage=None, notifier=None):
+def build_pipeline(
+    db_manager, settings, llm=None, image=None, storage=None, notifier=None, memory=None
+):
     return (
         EmailPipeline(
             db_manager,
@@ -30,6 +33,7 @@ def build_pipeline(db_manager, settings, llm=None, image=None, storage=None, not
             llm or FakeLLM(result=SUMMARY),
             image or FakeImage(),
             notifier=notifier,
+            memory=memory,
         ),
         EmailStore(db_manager),
     )
@@ -145,6 +149,18 @@ async def test_ready_pushes_notification(db_manager, app_settings):
     assert call["phrase"] == "Acme said yes"
     assert call["tone"] == "informative"
     assert call["audio_url"] == f"mem://users/{email.user_id}/emails/{email.id}.wav"
+
+
+async def test_ready_indexes_into_memory(db_manager, app_settings):
+    store = FakeVectorStore()
+    memory = EmailMemory(db_manager, FakeEmbedder(), store)
+    pipeline, email_store = build_pipeline(db_manager, app_settings, memory=memory)
+    email = await claimed_email(email_store)
+
+    await pipeline.process(email)
+
+    assert str(email.id) in store.records
+    assert store.records[str(email.id)].payload["user_id"] == str(email.user_id)
 
 
 async def test_push_failure_does_not_fail_card(db_manager, app_settings):

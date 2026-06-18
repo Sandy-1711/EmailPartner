@@ -13,6 +13,7 @@ from app.config.settings import settings
 from app.infrastructure.db.indexes import ensure_indexes
 from app.infrastructure.db.main import DBManager
 from app.infrastructure.db.mongo import MongoDBManager
+from app.infrastructure.embeddings.main import build_embedding_provider
 from app.infrastructure.images.main import build_image_provider
 from app.infrastructure.llm.main import build_llm_provider
 from app.infrastructure.notifications.main import build_push_sender
@@ -20,8 +21,10 @@ from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
 from app.infrastructure.storage.local import LocalBlobStorage
+from app.infrastructure.vectorstore.main import build_vector_store
 from app.routers.v1 import router as v1_router
 from app.services.events import CardEventBus
+from app.services.memory import EmailMemory
 from app.services.notifications.push import CardNotifier, CompositeNotifier, PushNotifier
 from app.services.pipeline.email_pipeline import EmailPipeline
 from app.services.queue.worker import PipelineWorker
@@ -103,6 +106,23 @@ async def lifespan(app: FastAPI):
         sinks.insert(0, PushNotifier(app.state.db_manager, push_sender))
     notifier = CompositeNotifier(sinks)
 
+    # Semantic memory: enabled when Qdrant is reachable, else None (degrades).
+    embedder = build_embedding_provider(
+        provider=settings.embedding_provider, api_key=api_key, model=settings.embedding_model
+    )
+    vector_store = await build_vector_store(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None,
+        collection=settings.qdrant_collection,
+        dim=settings.embedding_dim,
+    )
+    email_memory = (
+        EmailMemory(app.state.db_manager, embedder, vector_store)
+        if vector_store is not None
+        else None
+    )
+    app.state.email_memory = email_memory
+
     pipeline = EmailPipeline(
         app.state.db_manager,
         settings,
@@ -110,6 +130,7 @@ async def lifespan(app: FastAPI):
         app.state.llm_provider,
         app.state.image_provider,
         notifier=notifier,
+        memory=email_memory,
     )
     app.state.pipeline_worker = PipelineWorker(
         app.state.db_manager,

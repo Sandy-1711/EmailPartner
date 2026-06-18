@@ -12,6 +12,7 @@ from app.infrastructure.images.providers.base import ImageProvider
 from app.infrastructure.llm.providers.base import LLMProvider
 from app.infrastructure.storage.base import BlobStorage
 from app.models.db.emails import EmailProcessingStatus, Emails
+from app.services.memory import EmailMemory
 from app.services.notifications.push import CardNotifier, display_name
 from app.services.pipeline.prompts import (
     EMAIL_SUMMARY_SYSTEM,
@@ -44,6 +45,7 @@ class EmailPipeline:
         image: ImageProvider,
         *,
         notifier: CardNotifier | None = None,
+        memory: EmailMemory | None = None,
     ) -> None:
         self._email_store = EmailStore(db_manager)
         self._settings = settings
@@ -51,6 +53,7 @@ class EmailPipeline:
         self._llm = llm
         self._image = image
         self._notifier = notifier
+        self._memory = memory
 
     async def process(self, email: Emails) -> None:
         """Turn one claimed email into a finished card (status PROCESSING -> READY/FAILED)."""
@@ -89,7 +92,18 @@ class EmailPipeline:
             card_audio_url=card_audio_url,
         )
         logger.info("EmailPipeline: ready %s", email_id)
+        await self._index_for_memory(email, result)
         await self._push_ready(email, result, card_audio_url)
+
+    async def _index_for_memory(self, email: Emails, result: SummaryResult) -> None:
+        """Best-effort embed + upsert into semantic memory. A vector-store hiccup
+        must never fail the already-finished card."""
+        if self._memory is None:
+            return
+        try:
+            await self._memory.index(email, tone=result.tone)
+        except Exception:
+            logger.exception("EmailPipeline: memory index failed for %s", email.id)
 
     async def _push_ready(
         self, email: Emails, result: SummaryResult, card_audio_url: str | None

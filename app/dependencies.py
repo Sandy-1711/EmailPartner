@@ -65,6 +65,12 @@ def get_event_bus(request: Request):
     return _from_state(request, "event_bus", "CardEventBus")
 
 
+def get_email_memory(request: Request):
+    # May be None when Qdrant is unreachable — semantic search degrades, so this
+    # legitimately returns None rather than raising.
+    return getattr(request.app.state, "email_memory", None)
+
+
 def get_session_user_id(
     session_manager: SessionManager = Depends(get_session_manager),
     session_cookie: str | None = Cookie(
