@@ -12,6 +12,7 @@ from app.infrastructure.images.providers.base import ImageProvider
 from app.infrastructure.llm.providers.base import LLMProvider
 from app.infrastructure.storage.base import BlobStorage
 from app.models.db.emails import EmailProcessingStatus, Emails
+from app.services.notifications.push import CardNotifier, display_name
 from app.services.pipeline.prompts import (
     EMAIL_SUMMARY_SYSTEM,
     build_illustration_prompt,
@@ -41,12 +42,15 @@ class EmailPipeline:
         storage: BlobStorage,
         llm: LLMProvider,
         image: ImageProvider,
+        *,
+        notifier: CardNotifier | None = None,
     ) -> None:
         self._email_store = EmailStore(db_manager)
         self._settings = settings
         self._storage = storage
         self._llm = llm
         self._image = image
+        self._notifier = notifier
 
     async def process(self, email: Emails) -> None:
         """Turn one claimed email into a finished card (status PROCESSING -> READY/FAILED)."""
@@ -85,6 +89,26 @@ class EmailPipeline:
             card_audio_url=card_audio_url,
         )
         logger.info("EmailPipeline: ready %s", email_id)
+        await self._push_ready(email, result, card_audio_url)
+
+    async def _push_ready(
+        self, email: Emails, result: SummaryResult, card_audio_url: str | None
+    ) -> None:
+        """Best-effort FCM push so the card surfaces while the app is closed.
+        Never let a push failure fail the (already-finished) card."""
+        if self._notifier is None:
+            return
+        try:
+            await self._notifier.notify_card_ready(
+                user_id=email.user_id,
+                card_id=str(email.id),
+                phrase=result.image_caption,
+                sender=display_name(email.from_email),
+                tone=result.tone,
+                audio_url=card_audio_url,
+            )
+        except Exception:
+            logger.exception("EmailPipeline: push notification failed for %s", email.id)
 
     async def _try_generate_illustration(
         self,

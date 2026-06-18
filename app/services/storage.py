@@ -6,6 +6,7 @@ from bson import ObjectId
 
 from app.infrastructure.db.main import DBManager
 from app.models.db.crypto import EncryptedBlob
+from app.models.db.device_token import DeviceTokens
 from app.models.db.emails import Emails, EmailProcessingStatus
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.user import Users
@@ -114,6 +115,38 @@ class GmailAccountStore:
             {"_id": account_id},
             {"$set": update},
         )
+
+
+class DeviceTokenStore:
+    def __init__(self, db_manager: DBManager) -> None:
+        self._db = db_manager.document_db
+
+    async def register(self, user_id: ObjectId, token: str, platform: str) -> None:
+        """Idempotently bind an FCM token to a user.
+
+        A token is unique to a device install; if it already exists we just
+        refresh its owner + timestamp (the device may have been re-signed-in by
+        a different user) rather than create a duplicate.
+        """
+        existing = await self._db.find_one(DeviceTokens, {"token": token})
+        if existing is not None:
+            await self._db.update_one(
+                DeviceTokens,
+                {"_id": existing.id},
+                {"$set": {"user_id": user_id, "platform": platform, "updated_at": utc_now()}},
+            )
+            return
+        await self._db.insert_one(
+            DeviceTokens,
+            DeviceTokens(user_id=user_id, token=token, platform=platform),
+        )
+
+    async def list_tokens(self, user_id: ObjectId) -> list[str]:
+        rows = await self._db.find_many(DeviceTokens, {"user_id": user_id})
+        return [row.token for row in rows]
+
+    async def delete(self, token: str) -> None:
+        await self._db.delete_one(DeviceTokens, {"token": token})
 
 
 class EmailStore:

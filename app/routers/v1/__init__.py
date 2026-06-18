@@ -3,12 +3,14 @@ from fastapi import APIRouter
 from app.routers.v1.admin.controller import router as admin_router
 from app.routers.v1.auth.controller import router as auth_router
 from app.routers.v1.cards.controller import router as cards_router
+from app.routers.v1.devices.controller import router as devices_router
 from app.routers.v1.webhooks.gmail.controller import router as gmail_webhook_router
 
 router = APIRouter(prefix="/v1")
 router.include_router(auth_router)
 router.include_router(gmail_webhook_router)
 router.include_router(cards_router)
+router.include_router(devices_router)
 router.include_router(admin_router)
 
 __all__ = ["router"]

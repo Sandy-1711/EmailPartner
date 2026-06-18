@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     gmail_max_email_age_seconds: Annotated[
         int, Field(validation_alias="GMAIL_MAX_EMAIL_AGE_SECONDS", default=3600)
     ]
+    # Push notifications (FCM HTTP v1). Path to the Firebase service-account
+    # JSON (the admin SDK key). When unset, push is disabled and the worker
+    # simply skips it. The project id is read from the file itself.
+    firebase_credentials_file: Annotated[
+        str | None, Field(validation_alias="FIREBASE_CREDENTIALS_FILE", default=None)
+    ]
+    enable_push_notifications: Annotated[
+        bool, Field(validation_alias="ENABLE_PUSH_NOTIFICATIONS", default=True)
+    ]
     pubsub_verification_token: Annotated[
         SecretStr | None, Field(validation_alias="PUBSUB_VERIFICATION_TOKEN", default=None)
     ]

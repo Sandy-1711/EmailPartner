@@ -22,7 +22,7 @@ SUMMARY = SummaryResult(
 )
 
 
-def build_pipeline(db_manager, settings, llm=None, image=None, storage=None):
+def build_pipeline(db_manager, settings, llm=None, image=None, storage=None, notifier=None):
     return (
         EmailPipeline(
             db_manager,
@@ -30,9 +30,21 @@ def build_pipeline(db_manager, settings, llm=None, image=None, storage=None):
             storage or FakeStorage(),
             llm or FakeLLM(result=SUMMARY),
             image or FakeImage(),
+            notifier=notifier,
         ),
         EmailStore(db_manager),
     )
+
+
+class _RecordingNotifier:
+    def __init__(self, error=None) -> None:
+        self.error = error
+        self.calls: list[dict] = []
+
+    async def notify_card_ready(self, **kwargs) -> None:
+        self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
 
 
 async def claimed_email(store: EmailStore):
@@ -103,6 +115,33 @@ async def test_narration_failure_is_tolerated(db_manager, app_settings):
     assert stored is not None
     assert stored.processing_status == EmailProcessingStatus.READY
     assert stored.card_audio_url is None
+
+
+async def test_ready_pushes_notification(db_manager, app_settings):
+    notifier = _RecordingNotifier()
+    pipeline, store = build_pipeline(db_manager, app_settings, notifier=notifier)
+    email = await claimed_email(store)
+
+    await pipeline.process(email)
+
+    assert len(notifier.calls) == 1
+    call = notifier.calls[0]
+    assert call["card_id"] == str(email.id)
+    assert call["phrase"] == "Acme said yes"
+    assert call["tone"] == "informative"
+    assert call["audio_url"] == f"mem://users/{email.user_id}/emails/{email.id}.wav"
+
+
+async def test_push_failure_does_not_fail_card(db_manager, app_settings):
+    notifier = _RecordingNotifier(error=RuntimeError("fcm down"))
+    pipeline, store = build_pipeline(db_manager, app_settings, notifier=notifier)
+    email = await claimed_email(store)
+
+    await pipeline.process(email)
+
+    stored = await store.get_by_id(email.id)
+    assert stored is not None
+    assert stored.processing_status == EmailProcessingStatus.READY
 
 
 async def test_narration_disabled_skips_tts(db_manager, app_settings):
