@@ -25,7 +25,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     predictiveBackGestureEnabled: false,
   },
   plugins: [
-    'expo-audio',
     'expo-web-browser',
     'expo-secure-store',
   ],

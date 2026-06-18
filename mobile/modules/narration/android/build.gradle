@@ -15,7 +15,7 @@ android {
 }
 
 dependencies {
-  // keep in lockstep with expo-audio's androidx.media3 version
+  // androidx.media3 — the NarrationService owns all playback (ExoPlayer + MediaSession)
   implementation "androidx.media3:media3-session:1.9.0"
   implementation "androidx.media3:media3-exoplayer:1.9.0"
 }
