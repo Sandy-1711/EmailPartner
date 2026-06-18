@@ -132,6 +132,27 @@ class Settings(BaseSettings):
     image_model: Annotated[
         str, Field(validation_alias="IMAGE_MODEL", default="gemini-2.5-flash-image")
     ]
+    # Semantic memory (RAG). Off by default — needs a running Qdrant. When on,
+    # the pipeline embeds each ready card and upserts it to the vector store, and
+    # search uses it. See docs/agentic-architecture.md.
+    enable_semantic_memory: Annotated[
+        bool, Field(validation_alias="ENABLE_SEMANTIC_MEMORY", default=False)
+    ]
+    embedding_provider: Annotated[
+        str, Field(validation_alias="EMBEDDING_PROVIDER", default="gemini")
+    ]
+    embedding_model: Annotated[
+        str, Field(validation_alias="EMBEDDING_MODEL", default="text-embedding-004")
+    ]
+    embedding_dim: Annotated[int, Field(validation_alias="EMBEDDING_DIM", default=768)]
+    qdrant_url: Annotated[str, Field(validation_alias="QDRANT_URL", default="http://localhost:6333")]
+    qdrant_api_key: Annotated[
+        SecretStr | None, Field(validation_alias="QDRANT_API_KEY", default=None)
+    ]
+    qdrant_collection: Annotated[
+        str, Field(validation_alias="QDRANT_COLLECTION", default="emails")
+    ]
+
     local_storage_dir: Annotated[
         str, Field(validation_alias="LOCAL_STORAGE_DIR", default="./var/illustrations")
     ]
