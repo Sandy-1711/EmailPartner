@@ -1,0 +1,70 @@
+# Builds the Android APK (debug or release) and uploads it as an artifact.
+#
+# Required repo secret:
+#   GOOGLE_SERVICES_JSON  — the full contents of mobile/google-services.json
+#                           (gitignored, so CI recreates it from the secret).
+#
+# Release builds are signed with the Expo-generated debug key by default (good
+# enough for a sideloadable test APK). For a Play Store build, add a real
+# keystore + signing secrets and a signingConfig later.
+name: android
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Build variant"
+        type: choice
+        default: release
+        options: [debug, release]
+  push:
+    tags: ["v*"] # tagging a release builds the release APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Restore google-services.json
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON secret is not set"; exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+
+      - name: Prebuild (generate android/)
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assemble${{ (inputs.variant || 'release') == 'debug' && 'Debug' || 'Release' }} --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echo-mail-${{ inputs.variant || 'release' }}-apk
+          path: mobile/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

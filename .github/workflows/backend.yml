@@ -1,0 +1,46 @@
+name: backend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "tests/**"
+      - "req*.txt"
+      - "ruff.toml"
+      - "pyrightconfig.json"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "tests/**"
+      - "req*.txt"
+      - "ruff.toml"
+      - "pyrightconfig.json"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Build the same .venv the local hooks + pyrightconfig expect, so CI and
+      # local checks run identically.
+      - name: Install into .venv
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r req.txt -r req-dev.txt
+
+      - name: Ruff (lint)
+        run: .venv/bin/python -m ruff check app tests
+
+      - name: Pyright (types)
+        run: .venv/bin/python -m pyright
+
+      - name: Pytest
+        run: .venv/bin/python -m pytest -q
