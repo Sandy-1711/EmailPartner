@@ -132,12 +132,9 @@ class Settings(BaseSettings):
     image_model: Annotated[
         str, Field(validation_alias="IMAGE_MODEL", default="gemini-2.5-flash-image")
     ]
-    # Semantic memory (RAG). Off by default — needs a running Qdrant. When on,
-    # the pipeline embeds each ready card and upserts it to the vector store, and
-    # search uses it. See docs/agentic-architecture.md.
-    enable_semantic_memory: Annotated[
-        bool, Field(validation_alias="ENABLE_SEMANTIC_MEMORY", default=False)
-    ]
+    # Semantic memory (RAG). Always on when Qdrant is reachable — if it isn't,
+    # the pipeline + search degrade gracefully (best-effort, logged), so there's
+    # no on/off flag. See docs/agentic-architecture.md.
     embedding_provider: Annotated[
         str, Field(validation_alias="EMBEDDING_PROVIDER", default="gemini")
     ]
