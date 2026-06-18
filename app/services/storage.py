@@ -7,7 +7,7 @@ from bson import ObjectId
 from app.infrastructure.db.main import DBManager
 from app.models.db.crypto import EncryptedBlob
 from app.models.db.device_token import DeviceTokens
-from app.models.db.emails import Emails, EmailProcessingStatus
+from app.models.db.emails import EmailProcessingStatus, Emails
 from app.models.db.gmail_account import GmailAccount
 from app.models.db.user import Users
 from app.models.db.utils import utc_now

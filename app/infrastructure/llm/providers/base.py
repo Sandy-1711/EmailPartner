@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, TypeVar
+from collections.abc import AsyncGenerator
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -25,7 +26,7 @@ class LLMProvider(ABC):
         prompt: str,
         model: str,
         system_instructions: str,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         ...
 
     @abstractmethod

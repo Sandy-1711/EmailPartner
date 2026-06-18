@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Mapping, Sequence
-from typing import TypeVar
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, TypeVar
+
 from pydantic import BaseModel
 
 GenericType = TypeVar('GenericType', bound=BaseModel)

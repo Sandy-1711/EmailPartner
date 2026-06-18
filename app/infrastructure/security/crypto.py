@@ -22,7 +22,7 @@ class CryptoManager:
         return key
 
     @classmethod
-    def from_secret(cls, raw_key: str, key_id: str) -> "CryptoManager":
+    def from_secret(cls, raw_key: str, key_id: str) -> CryptoManager:
         return cls(master_key=cls._decode_key(raw_key), key_id=key_id)
 
     def encrypt_str(self, value: str) -> EncryptedBlob:

@@ -3,6 +3,7 @@ from typing import Annotated
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     gemini_api_key: Annotated[SecretStr, Field(validation_alias="GEMINI_API_KEY")]
     oauth_client_id: Annotated[SecretStr, Field(validation_alias="OAUTH_CLIENT_ID")]

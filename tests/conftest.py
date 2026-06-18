@@ -23,7 +23,6 @@ import pytest
 
 from app.config.settings import Settings
 from app.infrastructure.db.main import DBManager
-
 from tests.inmemory_db import InMemoryDocumentDB
 
 

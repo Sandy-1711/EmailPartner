@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import httpx
@@ -13,7 +13,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
@@ -44,7 +43,7 @@ class GmailWatchResponse(BaseModel):
     def expiration_datetime(self) -> datetime | None:
         if not self.expiration:
             return None
-        return datetime.fromtimestamp(int(self.expiration) / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(int(self.expiration) / 1000, tz=UTC)
 
 
 class GmailMessageHeader(BaseModel):
@@ -61,7 +60,7 @@ class GmailMessagePayload(BaseModel):
     mime_type: str | None = Field(default=None, alias="mimeType")
     headers: list[GmailMessageHeader] = Field(default_factory=list[GmailMessageHeader])
     body: GmailMessageBody | None = None
-    parts: list["GmailMessagePayload"] = Field(default_factory=list["GmailMessagePayload"])
+    parts: list[GmailMessagePayload] = Field(default_factory=list["GmailMessagePayload"])
 
 
 class GmailMessage(BaseModel):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -15,7 +15,6 @@ from tenacity import (
 )
 
 from app.config.settings import Settings
-
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
@@ -43,7 +42,7 @@ class OAuthTokenResponse(BaseModel):
     id_token: str | None = Field(default=None, alias="id_token")
 
     def expires_at(self) -> datetime:
-        return datetime.now(timezone.utc) + timedelta(seconds=self.expires_in)
+        return datetime.now(UTC) + timedelta(seconds=self.expires_in)
 
 
 @dataclass(frozen=True)

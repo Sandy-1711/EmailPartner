@@ -99,7 +99,7 @@ def build_fcm_sender(
         creds = service_account.Credentials.from_service_account_file(
             credentials_file, scopes=[_FCM_SCOPE]
         )
-        with open(credentials_file, "r", encoding="utf-8") as fh:
+        with open(credentials_file, encoding="utf-8") as fh:
             project_id = json.load(fh)["project_id"]
     except Exception:
         logger.exception(

@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import EmailStr, Field
 from bson import ObjectId
+from pydantic import EmailStr, Field
+from pydantic_mongo import PydanticObjectId
 
 from app.config import ConfigModels
 from app.models.db.crypto import EncryptedBlob
-from pydantic_mongo import PydanticObjectId
 from app.models.db.utils import utc_now
 
 

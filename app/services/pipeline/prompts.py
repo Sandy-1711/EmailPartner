@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.models.db.emails import Emails
 
-
 EMAIL_SUMMARY_SYSTEM = (
     "You are an assistant that distills an email into a glanceable card. "
     "Return a structured response with six fields, all in English:\n"

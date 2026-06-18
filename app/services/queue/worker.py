@@ -84,7 +84,7 @@ class PipelineWorker:
             self._wakeup.clear()
             try:
                 await asyncio.wait_for(self._wakeup.wait(), timeout=self._poll_interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def _claim_and_process_one(self) -> bool:

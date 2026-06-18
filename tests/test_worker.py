@@ -7,10 +7,8 @@ import pytest
 from app.models.db.emails import EmailProcessingStatus, Emails
 from app.services.queue.worker import PipelineWorker
 from app.services.storage import EmailStore
-
-from tests.fakes import FakeImage, FakeLLM, FakeStorage
 from tests.test_email_store import make_email
-from tests.test_pipeline import SUMMARY, build_pipeline
+from tests.test_pipeline import build_pipeline
 
 pytestmark = pytest.mark.anyio
 

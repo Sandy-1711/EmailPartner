@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import io
 import wave
-from typing import AsyncGenerator, AsyncIterable, TypeVar
+from collections.abc import AsyncGenerator, AsyncIterable
+from typing import TypeVar
 
 from google import genai
 from google.genai import types
@@ -23,7 +24,7 @@ class GeminiProvider(LLMProvider):
         prompt: str,
         model: str,
         system_instructions: str,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         config = genai.types.GenerateContentConfig(
             system_instruction=system_instructions,
         )

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import Field
 from bson import ObjectId
+from pydantic import Field
+from pydantic_mongo import PydanticObjectId
 
 from app.config import ConfigModels
-from pydantic_mongo import PydanticObjectId
 from app.models.db.utils import utc_now
 
 

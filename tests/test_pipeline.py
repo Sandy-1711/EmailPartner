@@ -5,7 +5,6 @@ import pytest
 from app.models.db.emails import EmailProcessingStatus
 from app.services.pipeline.email_pipeline import EmailPipeline, SummaryResult
 from app.services.storage import EmailStore
-
 from tests.fakes import FakeImage, FakeLLM, FakeStorage
 from tests.test_email_store import make_email
 
