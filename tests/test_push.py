@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 from bson import ObjectId
 
-from app.infrastructure.notifications.fcm import SendResult
+from app.infrastructure.notifications.providers import PushSender, SendResult
 from app.services.notifications.push import PushNotifier, display_name
 from app.services.storage import DeviceTokenStore
 
 pytestmark = pytest.mark.anyio
 
 
-class FakeSender:
+class FakeSender(PushSender):
     def __init__(self, results: dict[str, SendResult] | None = None) -> None:
         self.results = results or {}
         self.sent: list[tuple[str, dict[str, str]]] = []

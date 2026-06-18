@@ -8,7 +8,7 @@ from bson import ObjectId
 from pydantic import BaseModel
 
 from app.infrastructure.db.main import DBManager
-from app.infrastructure.notifications.fcm import MessageSender, SendResult
+from app.infrastructure.notifications.providers import PushSender, SendResult
 from app.services.storage import DeviceTokenStore
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class PushNotifier:
     Tokens FCM reports as unregistered are pruned.
     """
 
-    def __init__(self, db_manager: DBManager, sender: MessageSender) -> None:
+    def __init__(self, db_manager: DBManager, sender: PushSender) -> None:
         self._tokens = DeviceTokenStore(db_manager)
         self._sender = sender
 

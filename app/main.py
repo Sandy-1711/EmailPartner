@@ -16,7 +16,7 @@ from app.infrastructure.db.main import DBManager
 from app.infrastructure.db.mongo import MongoDBManager
 from app.infrastructure.images.main import build_image_provider
 from app.infrastructure.llm.main import build_llm_provider
-from app.infrastructure.notifications.fcm import build_fcm_sender
+from app.infrastructure.notifications.main import build_push_sender
 from app.infrastructure.security.crypto import CryptoManager
 from app.infrastructure.security.session import SessionManager
 from app.infrastructure.security.state import OAuthStateManager
@@ -86,13 +86,16 @@ async def lifespan(app: FastAPI):
         settings.local_storage_dir, settings.local_storage_public_base_url
     )
 
-    fcm_sender = (
-        build_fcm_sender(settings.firebase_credentials_file, app.state.http_client)
+    push_sender = (
+        build_push_sender(
+            credentials_file=settings.firebase_credentials_file,
+            http_client=app.state.http_client,
+        )
         if settings.enable_push_notifications
         else None
     )
     notifier = (
-        PushNotifier(app.state.db_manager, fcm_sender) if fcm_sender is not None else None
+        PushNotifier(app.state.db_manager, push_sender) if push_sender is not None else None
     )
 
     pipeline = EmailPipeline(

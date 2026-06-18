@@ -3,30 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from enum import Enum
-from typing import Protocol
 
 from httpx import AsyncClient
+
+from app.infrastructure.notifications.providers.base import PushSender, SendResult
 
 logger = logging.getLogger(__name__)
 
 _FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 
 
-class SendResult(str, Enum):
-    OK = "ok"
-    INVALID = "invalid"  # token unregistered — caller should prune it
-    ERROR = "error"
-
-
-class MessageSender(Protocol):
-    """A thing that can push a data payload to one device token. PushNotifier
-    depends on this (not FcmSender directly) so tests can substitute a fake."""
-
-    async def send(self, token: str, data: dict[str, str]) -> SendResult: ...
-
-
-class FcmSender:
+class FcmSender(PushSender):
     """Sends FCM HTTP v1 messages with a service-account access token.
 
     Uses google-auth (already a dependency) to mint/refresh the OAuth token and
@@ -40,6 +27,19 @@ class FcmSender:
         self._http = http_client
         self._lock = asyncio.Lock()
         self._url = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
+
+    @classmethod
+    def from_credentials_file(cls, credentials_file: str, http_client: AsyncClient) -> FcmSender:
+        """Build from a service-account JSON path (the project id is read from
+        the file). Raises if the file is missing or malformed."""
+        from google.oauth2 import service_account
+
+        creds = service_account.Credentials.from_service_account_file(
+            credentials_file, scopes=[_FCM_SCOPE]
+        )
+        with open(credentials_file, encoding="utf-8") as fh:
+            project_id = json.load(fh)["project_id"]
+        return cls(creds, project_id, http_client)
 
     async def _access_token(self) -> str:
         if not self._credentials.valid:
@@ -85,27 +85,3 @@ class FcmSender:
             return SendResult.INVALID
         logger.warning("FcmSender: send failed %s %s", resp.status_code, resp.text[:300])
         return SendResult.ERROR
-
-
-def build_fcm_sender(
-    credentials_file: str | None, http_client: AsyncClient
-) -> FcmSender | None:
-    """Build an FcmSender from a service-account JSON path, or None if disabled."""
-    if not credentials_file:
-        return None
-    try:
-        from google.oauth2 import service_account
-
-        creds = service_account.Credentials.from_service_account_file(
-            credentials_file, scopes=[_FCM_SCOPE]
-        )
-        with open(credentials_file, encoding="utf-8") as fh:
-            project_id = json.load(fh)["project_id"]
-    except Exception:
-        logger.exception(
-            "build_fcm_sender: could not load credentials from %s; push disabled",
-            credentials_file,
-        )
-        return None
-    logger.info("FCM push enabled for project %s", project_id)
-    return FcmSender(creds, project_id, http_client)
