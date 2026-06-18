@@ -120,6 +120,7 @@ The library renders the widget tree to a **bitmap** shown in an ImageView with `
 - Smaller backend: test for `GET /v1/cards/{id}`; invalid_grant hardening in watch renewal; GCS storage; SSE.
 
 ## Conventions
-- Granular conventional commits DURING work (user has insisted repeatedly), no Co-Authored-By trailer.
-- Backend tests must stay green; `npx tsc --noEmit` in mobile/ before committing UI work.
+- Granular conventional commits DURING work (user has insisted repeatedly), no Co-Authored-By trailer. Commit each logical step as it lands — do NOT batch a whole subsystem into one commit at the end (user called this out 2026-06-18).
+- **Backend checks (run before every commit, enforced by pre-commit):** `ruff` + `pyright` on commit, `pytest` on push. Tooling in `req-dev.txt`; config in `ruff.toml` / `pyrightconfig.json` / `.pre-commit-config.yaml`. One-time: `python -m pre_commit install && python -m pre_commit install --hook-type pre-push` (commit from the activated `.venv` so `python` resolves to it). Manual: `python -m pyright`, `python -m ruff check app tests`, `python -m pytest tests`. pyright is `basic` mode and currently 0 errors — keep it there.
+- Mobile: `npx tsc --noEmit` in mobile/ before committing UI work.
 - `mobile/android/` is generated (`expo prebuild`) and gitignored — never commit it.
